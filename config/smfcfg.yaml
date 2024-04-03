@@ -1,0 +1,98 @@
+info:
+  version: 1.0.7
+  description: SMF initial local configuration
+
+configuration:
+  smf_name: SMF # the name of this SMF
+  sbi: # Service-based interface information
+    scheme: http # the protocol for sbi (http or https)
+    register_ip_v4: 127.0.0.2 # IP used to register to NRF
+    binding_ip_v4: 127.0.0.2 # IP used to bind the service
+    port: 8000 # Port used to bind the service
+    tls: # the local path of TLS key
+      key: cert/smf.key # SMF TLS Certificate
+      pem: cert/smf.pem # SMF TLS Private key
+  service_name_list: # the SBI services provided by this SMF, refer to TS 29.502
+    - nsmf-pdusession # Nsmf_PDUSession service
+    - nsmf-event-exposure # Nsmf_EventExposure service
+    - nsmf-oam # OAM service
+  snssai_infos: # the S-NSSAI (Single Network Slice Selection Assistance Information) list supported by this AMF
+    - s_nssai: # S-NSSAI (Single Network Slice Selection Assistance Information)
+        sst: 1 # Slice/Service Type (uinteger, range: 0~255)
+        sd: 010203 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
+      dnn_infos: # DNN information list
+        - dnn: internet # Data Network Name
+          dns: # the IP address of DNS
+            ipv4: 8.8.8.8
+            ipv6: 2001:4860:4860::8888
+    - s_nssai: # S-NSSAI (Single Network Slice Selection Assistance Information)
+        sst: 1 # Slice/Service Type (uinteger, range: 0~255)
+        sd: 112233 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
+      dnn_infos: # DNN information list
+        - dnn: internet # Data Network Name
+          dns: # the IP address of DNS
+            ipv4: 8.8.8.8
+            ipv6: 2001:4860:4860::8888
+  plmn_list: # the list of PLMN IDs that this SMF belongs to (optional, remove this key when unnecessary)
+    - mcc: 208 # Mobile Country Code (3 digits string, digit: 0~9)
+      mnc: 93 # Mobile Network Code (2 or 3 digits string, digit: 0~9)
+  locality: area1 # Name of the location where a set of AMF, SMF, PCF and UPFs are located
+  pfcp: # the IP address of N4 interface on this SMF (PFCP)
+    # addr config is deprecated in smf config v1.0.3, please use the following config
+    node_id: 127.0.0.1 # the Node ID of this SMF
+    listen_addr: 127.0.0.1 # the IP/FQDN of N4 interface on this SMF (PFCP)
+    external_addr: 127.0.0.1 # the IP/FQDN of N4 interface on this SMF (PFCP)
+  userplane_information: # list of userplane information
+    up_nodes: # information of userplane node (AN or UPF)
+      g_n_b1: # the name of the node
+        type: AN # the type of the node (AN or UPF)
+      UPF: # the name of the node
+        type: UPF # the type of the node (AN or UPF)
+        node_id: 127.0.0.8 # the Node ID of this UPF
+        addr: 127.0.0.8 # the IP/FQDN of N4 interface on this UPF (PFCP)
+        s_nssai_upf_infos: # S-NSSAI information list for this UPF
+          - s_nssai: # S-NSSAI (Single Network Slice Selection Assistance Information)
+              sst: 1 # Slice/Service Type (uinteger, range: 0~255)
+              sd: 010203 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
+            dnn_upf_info_list: # DNN information list for this S-NSSAI
+              - dnn: internet
+                pools:
+                  - cidr: 10.60.0.0/16
+                static_pools:
+                  - cidr: 10.60.100.0/24
+          - s_nssai: # S-NSSAI (Single Network Slice Selection Assistance Information)
+              sst: 1 # Slice/Service Type (uinteger, range: 0~255)
+              sd: 112233 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
+            dnn_upf_info_list: # DNN information list for this S-NSSAI
+              - dnn: internet
+                pools:
+                  - cidr: 10.61.0.0/16
+                static_pools:
+                  - cidr: 10.61.100.0/24
+        interfaces: # Interface list for this UPF
+          - interface_type: N3 # the type of the interface (N3 or N9)
+            endpoints: # the IP address of this N3/N9 interface on this UPF
+              - 127.0.0.8
+            network_instances:  # Data Network Name (DNN)
+              - internet
+    links: # the topology graph of userplane, A and B represent the two nodes of each link
+      - A: gNB1
+        B: UPF
+  # retransmission timer for pdu session modification command
+  t3591:
+    enable: true     # true or false
+    expire_time: 16s   # default is 6 seconds
+    max_retry_times: 3 # the max number of retransmission
+  # retransmission timer for pdu session release command
+  t3592:
+    enable: true     # true or false
+    expire_time: 16s   # default is 6 seconds
+    max_retry_times: 3 # the max number of retransmission
+  nrf_uri: http://127.0.0.10:8000 # a valid URI of NRF
+  #urr_period: 10 # default usage report period in seconds
+  #urr_threshold: 1000 # default usage report threshold in bytes
+
+logger: # log output setting
+  enable: true # true or false
+  level: info # how detailed to output, value: trace, debug, info, warn, error, fatal, panic
+  report_caller: false # enable the caller report or not, value: true or false

@@ -1,0 +1,15 @@
+[package]
+name = "lightning-cli"
+description = "A CLI for the Lightning Network"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap.workspace = true
+datawarp = { path = "../lightning-nf/datawarp" }
+infinisync = { path = "../lightning-nf/infinisync" }
+common_utils = { path = "../common_utils" }
+serde_yaml = "0.9.34+deprecated"

@@ -1,0 +1,12 @@
+[package]
+name = "datawarp"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde.workspace = true
+serde_yaml.workspace = true
+common_utils = { path = "../../common_utils" }

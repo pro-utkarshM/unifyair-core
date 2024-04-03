@@ -1,11 +1,22 @@
 [workspace]
-members = [ "datawarp","infinisync"] 
+members = [ "common_utils", "lightning-cli",
+    "lightning-nf/datawarp",
+    "lightning-nf/infinisync"
+]
+resolver = "2"
 
 [workspace.package]
 name = "unifyair-core"
 version = "0.1.0"
 edition = "2021"
+authors = ["UnifyAir Maintainers <maintainers@unifyair.com>"]
+repository = "https://bitbucket.org/blocknet/unifyair-core"
+homepage = "https://unifyair.com/"
+description = "UnifyAir 5g Core"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [workspace.dependencies]
+clap = { version = "4.5.4", features = ["cargo"] }
+serde = { version = "1.0.197", features = ["derive"] }
+serde_yaml = "0.9.34"
