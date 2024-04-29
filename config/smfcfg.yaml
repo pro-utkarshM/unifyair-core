@@ -96,3 +96,47 @@ logger: # log output setting
   enable: true # true or false
   level: info # how detailed to output, value: trace, debug, info, warn, error, fatal, panic
   report_caller: false # enable the caller report or not, value: true or false
+
+ue_routing_info: # the list of UE routing information
+  ue1: # Group Name
+    members:
+      - imsi-208930000007487 # Subscription Permanent Identifier of the UE
+    topology: # Network topology for this group (Uplink: A->B, Downlink: B->A)
+      # default path derived from this topology
+      # node name should be consistent with smfcfg.yaml
+      - A: gNB1
+        B: BranchingUPF
+      - A: BranchingUPF
+        B: AnchorUPF1
+    specific_path:
+      - dest: 10.60.0.103/32 # the destination IP address on Data Network (DN)
+        # the order of UPF nodes in this path. We use the UPF's name to represent each UPF node.
+        # The UPF's name should be consistent with smfcfg.yaml
+        path: [BranchingUPF, AnchorUPF2]
+
+  ue2: # Group Name
+    members:
+      - imsi-208930000007486 # Subscription Permanent Identifier of the UE
+    topology: # Network topology for this group (Uplink: A->B, Downlink: B->A)
+      # default path derived from this topology
+      # node name should be consistent with smfcfg.yaml
+      - A: gNB1
+        B: BranchingUPF
+      - A: AnchorUPF2
+        B: AnchorUPF1
+    specific_path:
+      - dest: 10.0.0.11/32 # the destination IP address on Data Network (DN)
+        # the order of UPF nodes in this path. We use the UPF's name to represent each UPF node.
+        # The UPF's name should be consistent with smfcfg.yaml
+        path: [ BranchingUPF, AnchorUPF2 ]
+
+route_profile: # Maintains the mapping between RouteProfileID and ForwardingPolicyID of UPF
+  mec1: # Route Profile identifier
+    forwarding_policy_id: 10 # Forwarding Policy ID of the route profile
+
+pfd_data_for_app: # PFDs for an Application
+  - application_id: edge # Application identifier
+    pfds: # PFDs for the Application
+      - pfd_id: pfd1 # PFD identifier
+        flow_descriptions: # Represents a 3-tuple with protocol, server ip and server port for UL/DL application traffic
+          - permit out ip from 10.60.0.1 8080 to any

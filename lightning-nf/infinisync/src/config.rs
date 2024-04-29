@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -5,6 +6,9 @@ pub struct InfiniSyncConfig {
     info: Info,
     configuration: Configuration,
     logger: Logger,
+    ue_routing_info: HashMap<String, UeRoutingInfo>,
+    route_profile: HashMap<String, RouteProfile>,
+    pfd_data_for_app: Vec<ApplicationPfd>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -143,4 +147,42 @@ struct Logger {
     enable: bool,
     level: String,
     report_caller: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct UeRoutingInfo {
+    members: Vec<String>,
+    topology: Vec<Topology>,
+    specific_path: Vec<SpecificPath>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Topology {
+    #[serde(rename = "A")]
+    a: String,
+    #[serde(rename = "B")]
+    b: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SpecificPath {
+    dest: String,
+    path: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct RouteProfile {
+    forwarding_policy_id: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ApplicationPfd {
+    application_id: String,
+    pfds: Vec<Pfd>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Pfd {
+    pfd_id: String,
+    flow_descriptions: Vec<String>,
 }
