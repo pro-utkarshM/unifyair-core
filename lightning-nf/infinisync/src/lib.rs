@@ -1,3 +1,5 @@
+use crate::config::InfiniSyncConfig;
+
 pub fn add(left: usize, right: usize) -> usize {
     left + right
 }
@@ -13,8 +15,9 @@ mod tests {
     }
 }
 
-pub fn run(config: &config::InfiniSyncConfig) {
+pub fn run(config: &InfiniSyncConfig) {
     println!("Running with config: {:?}", config);
 }
 
 pub mod config;
+mod net_gateways;

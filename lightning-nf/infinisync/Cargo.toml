@@ -3,6 +3,7 @@ name = "infinisync"
 version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }
+publish = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -10,3 +11,4 @@ edition = { workspace = true }
 serde.workspace = true
 serde_yaml.workspace = true
 common_utils = { path = "../../common_utils" }
+messages = {git = "https://github.com/workerwork/rust-pfcp.git", branch = "master", as = "pfcp-messages"}
