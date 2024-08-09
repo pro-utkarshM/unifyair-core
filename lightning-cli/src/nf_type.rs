@@ -1,9 +1,4 @@
-use {
-    std::fmt,
-    std::fs::File,
-    std::io::Read,
-    common_utils::yaml_parser::YamlParser,
-};
+use {common_utils::yaml_parser::YamlParser, std::fmt, std::fs::File, std::io::Read};
 const DATAWARP_STR: &'static str = "datawarp";
 const INFINISYNC_STR: &'static str = "infinisync";
 
@@ -44,7 +39,6 @@ impl NFType {
         }
     }
 
-
     pub fn get_config(&self, config_path: &str) -> NFConfig {
         let mut file = File::open(config_path).expect("Failed to open config file");
         let mut contents = String::new();
@@ -57,3 +51,4 @@ impl NFType {
         }
     }
 }
+

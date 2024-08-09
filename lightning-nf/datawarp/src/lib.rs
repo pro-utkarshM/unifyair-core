@@ -13,8 +13,7 @@ mod tests {
     }
 }
 
-
-pub fn run(config: &config::DataWarpConfig) {
+pub async fn run(config: &config::DataWarpConfig) {
     println!("Running with config: {:?}", config);
 }
 

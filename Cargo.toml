@@ -1,7 +1,9 @@
 [workspace]
-members = [ "common_utils", "lightning-cli",
+members = [
+    "common_utils",
+    "lightning-cli",
     "lightning-nf/datawarp",
-    "lightning-nf/infinisync"
+    "lightning-nf/infinisync",
 ]
 resolver = "2"
 
@@ -21,3 +23,31 @@ publish = false
 clap = { version = "4.5.4", features = ["cargo"] }
 serde = { version = "1.0.197", features = ["derive"] }
 serde_yaml = "0.9.34"
+# pfcp-ie = { git = "ssh://git@bitbucket.org/blocknet/pfcp.git/", branch = "master", package = "ie" }
+pfcp = { path = "../pfcp/pfcp", package = "pfcp" }
+tokio = { version = "1.38", features = ["full"] }
+bytes = "1.0"
+chrono = { version = "0.4", default-features = false, features = ["serde"] }
+futures-core = "0.3"
+percent-encoding = "2.3"
+regress = "0.10"
+reqwest = { version = "0.11", default-features = false, features = [
+    "json",
+    "stream",
+] }
+serde_json = "1.0"
+serde_urlencoded = "0.7"
+uuid = { version = "1.0", features = ["serde", "v4"] }
+openapi_smf = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", branch = "master", package = "openapi-smf", features = [
+    "server",
+] }
+models = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", branch = "master", package = "oasbi" }
+
+async-trait = "0.1"
+axum-extra = { version = "0.9", features = ["cookie", "multipart"] }
+axum = { version = "0.7" }
+tracing-subscriber = "0.3"
+tracing = { version = "0.1.0" }
+
+[net]
+git-fetch-with-cli = true

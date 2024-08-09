@@ -48,4 +48,5 @@ struct Logger {
     enable: bool,
     level: String,
     report_caller: bool,
+
 }

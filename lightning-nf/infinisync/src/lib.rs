@@ -1,23 +1,9 @@
 use crate::config::InfiniSyncConfig;
-
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
-
-pub fn run(config: &InfiniSyncConfig) {
-    println!("Running with config: {:?}", config);
+use crate::sbi::start_server;
+pub async fn run(config: &InfiniSyncConfig) {
+	start_server(&config.configuration.sbi.binding_ip_v4).await;
 }
 
 pub mod config;
 mod net_gateways;
+pub mod sbi;
