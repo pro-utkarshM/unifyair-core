@@ -1,0 +1,25 @@
+[package]
+name = "client"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description.workspace = true
+publish.workspace = true
+
+[dependencies]
+reqwest.workspace = true
+tower.workspace = true
+thiserror.workspace = true
+pin-project-lite.workspace = true
+oasbi.workspace = true
+openapi-nrf.workspace = true
+http.workspace = true
+serde_urlencoded.workspace = true
+serde.workspace = true
+serde.json = true
+serde_json.workspace = true
+serde_with.workspace = true
+formatx.workspace = true
+

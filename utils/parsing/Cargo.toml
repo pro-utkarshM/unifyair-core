@@ -1,5 +1,5 @@
 [package]
-name = "common_utils"
+name = "parsing"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
