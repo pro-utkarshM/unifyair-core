@@ -8,14 +8,19 @@ publish = { workspace = true }
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-pfcp.workspace = true
+pfcp = { workspace = true, features = ["rel-15"] }
 serde.workspace = true
 serde_yaml.workspace = true
-models.workspace = true
+oasbi.workspace = true
 async-trait.workspace = true
 tracing-subscriber.workspace = true
 tokio.workspace = true
 axum.workspace = true
 axum-extra.workspace = true
-openapi_smf.workspace = true
-common_utils = { path = "../../common_utils" }
+openapi-smf.workspace = true
+parsing = { path = "../../utils/parsing" }
+bytes.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+pfcp = { workspace = true, features = ["tests", "default"] }

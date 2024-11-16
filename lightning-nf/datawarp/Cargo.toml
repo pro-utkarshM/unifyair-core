@@ -10,4 +10,4 @@ publish = { workspace = true }
 [dependencies]
 serde.workspace = true
 serde_yaml.workspace = true
-common_utils = { path = "../../common_utils" }
+parsing = { path = "../../utils/parsing" }

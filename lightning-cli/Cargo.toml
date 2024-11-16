@@ -12,6 +12,6 @@ publish = { workspace = true }
 clap = { workspace = true }
 datawarp = { path = "../lightning-nf/datawarp" }
 infinisync = { path = "../lightning-nf/infinisync" }
-common_utils = { path = "../common_utils" }
+parsing = { path = "../utils/parsing" }
 tokio = { workspace = true, features = ["full"] }
 serde_yaml = { workspace = true }
