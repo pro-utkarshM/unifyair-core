@@ -3,6 +3,8 @@ members = [
     "lightning-cli",
     "lightning-nf/datawarp",
     "lightning-nf/infinisync",
+    # Remove Post testing
+    "testing",
     "utils/client",
     "utils/parsing",
 ]
@@ -19,13 +21,12 @@ description = "UnifyAir 5g Core"
 publish = false
 
 [workspace.dependencies]
-clap = { version = "4.5.4", features = ["cargo"] }
-serde = { version = "1.0.197", features = ["derive"] }
-serde_yaml = "0.9.34"
-# pfcp-ie = { git = "ssh://git@bitbucket.org/blocknet/pfcp.git/", branch = "master", package = "ie" }
+url = { version = "2.5.3" }
 pfcp = { path = "../pfcp/pfcp", package = "pfcp" }
+tower-http = { version = "0.6.1", features = ["full"] }
+bytes = { version = "1.8.0" }
+# pfcp-ie = { git = "ssh://git@bitbucket.org/blocknet/pfcp.git/", branch = "master", package = "ie" }
 tokio = { version = "1.38", features = ["full"] }
-bytes = "1.0"
 chrono = { version = "0.4", default-features = false, features = ["serde"] }
 futures-core = "0.3"
 percent-encoding = "2.3"
@@ -56,6 +57,11 @@ http = { version = "1.1.0" }
 pin-project-lite = "0.2.15"
 serde_with = { version = "3.11.0" }
 formatx = { version = "0.2.2" }
+clap = { version = "4.5.4", features = ["cargo"] }
+serde = { version = "1.0.197", features = ["derive"] }
+serde_yaml = "0.9.34"
+http-body-util = "0.1.2"
+tower-reqwest = "0.4.0"
 
 [net]
 git-fetch-with-cli = true

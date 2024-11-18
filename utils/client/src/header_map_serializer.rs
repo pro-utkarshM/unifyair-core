@@ -2,7 +2,7 @@ use std::{fmt::Display, str::FromStr};
 
 use http::header::{InvalidHeaderName, InvalidHeaderValue};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use serde::ser::{Serialize, SerializeMap, SerializeStruct, SerializeStructVariant, Serializer};
+use serde::ser::{Serialize, SerializeStruct, Serializer};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
