@@ -1,61 +1,179 @@
-use std::{fmt, fs::File, io::Read};
+use std::{fs::File, io, io::Read};
 
-use parsing::YamlParser;
-const DATAWARP_STR: &'static str = "datawarp";
-const INFINISYNC_STR: &'static str = "infinisync";
+use nf_base::{LoggingConfig, NfConfig, NfInstance, RuntimeConfig, RuntimeType};
+use omnipath::OmniPathApp;
+use thiserror::Error;
+use tokio::runtime::{Builder, Runtime};
+use tokio_util::sync::CancellationToken;
+use tracing::trace;
+use tracing_error::ErrorLayer;
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
-pub enum NFType {
-	DataWarp,
-	InfiniSync,
-}
+pub const DATAWARP_STR: &'static str = "datawarp";
+pub const INFINISYNC_STR: &'static str = "infinisync";
+pub const OMNIPATH_STR: &'static str = "omnipath";
 
-#[derive(Debug)]
-pub enum NFConfig {
-	DataWarpConfig(datawarp::config::DataWarpConfig),
-	InfiniSyncConfig(infinisync::config::InfiniSyncConfig),
-}
+pub struct App;
 
-impl fmt::Display for NFType {
-	fn fmt(
-		&self,
-		f: &mut fmt::Formatter,
-	) -> fmt::Result {
-		match self {
-			Self::DataWarp => write!(f, "{}", DATAWARP_STR),
-			Self::InfiniSync => write!(f, "{}", INFINISYNC_STR),
-		}
-	}
-}
-
-impl NFType {
-	pub fn from_str(s: &str) -> Self {
-		match s {
-			DATAWARP_STR => NFType::DataWarp,
-			INFINISYNC_STR => NFType::InfiniSync,
-			&_ => todo!(),
-		}
-	}
-
-	pub fn to_str(&self) -> &'static str {
-		// TODO: Analyze the clone here later on if it is necessary
-		match self {
-			Self::DataWarp => DATAWARP_STR.clone(),
-			Self::InfiniSync => INFINISYNC_STR.clone(),
-		}
-	}
-
-	pub fn get_config(
-		&self,
+impl App {
+	pub fn start_app(
+		app_name: &str,
 		config_path: &str,
-	) -> NFConfig {
+	) -> color_eyre::Result<()> {
+		match app_name {
+			OMNIPATH_STR => Self::run::<OmniPathApp>(config_path),
+			_ => unreachable!(),
+		}
+	}
+
+	fn run<T: NfInstance>(config_path: &str) -> color_eyre::Result<()> {
+		let nf_app: NfApp<T> = NfApp::new(config_path)?;
+		let runtime_config = nf_app.config.get_runtime_config();
+		let logging_config = nf_app.config.get_log_config();
+		setup_logging(logging_config)?;
+		trace!("config: {:#?}", nf_app.config);
+		let rt = setup_runtime(runtime_config)?;
+		rt.block_on(nf_app.run())?;
+		Ok(())
+	}
+}
+
+#[derive(Error, Debug)]
+pub enum AppSetupError {
+	#[error(transparent)]
+	ConfigError(#[from] AppConfigError),
+
+	#[error("Tokio Runtime Build Error: {0}")]
+	RuntimeBuildError(#[from] io::Error),
+
+	#[error("Color Eyre Installation Error: {0}")]
+	LoggingError(#[from] color_eyre::Report),
+}
+
+#[derive(Error, Debug)]
+pub enum AppConfigError {
+	#[error("Error reading App Config: {0}")]
+	IoError(#[from] io::Error),
+	#[error("Error parsing Config yaml: {0}")]
+	YamlParsingError(#[from] serde_yaml::Error),
+}
+
+pub struct NfApp<T: NfInstance> {
+	pub(crate) cancellation_token: CancellationToken,
+	pub(crate) config: T::Config,
+}
+
+#[derive(Error, Debug)]
+pub enum NfError<T> {
+	#[error("NF Initialization Error: {0}")]
+	InitializationFailedError(
+		#[backtrace]
+		#[source]
+		T,
+	),
+	#[error("Running NF Error: {0}")]
+	RuntimeError(
+		#[backtrace]
+		#[source]
+		T,
+	),
+	#[error("Deregistration NF Error: {0}")]
+	ShutdownDeregistrationFailedError(
+		#[backtrace]
+		#[source]
+		T,
+	),
+	#[error("Runtime error and unable to deregister : {0} {1}")]
+	RuntimeWithDeregistrationError(
+		#[backtrace]
+		#[source]
+		T,
+		T,
+	),
+}
+
+impl<T: NfInstance> NfApp<T> {
+	pub fn new(config_path: &str) -> Result<Self, AppSetupError> {
 		let mut file = File::open(config_path).expect("Failed to open config file");
 		let mut contents = String::new();
 		file.read_to_string(&mut contents)
-			.expect("Failed to read config file");
+			.map_err(AppConfigError::from)?;
+		let config = serde_yaml::from_str(&contents).map_err(AppConfigError::from)?;
 
-		match self {
-			Self::DataWarp => NFConfig::DataWarpConfig(YamlParser::from_yaml(&contents)),
-			Self::InfiniSync => NFConfig::InfiniSyncConfig(YamlParser::from_yaml(&contents)),
+		let cancellation_token = CancellationToken::new();
+		Ok(NfApp {
+			cancellation_token,
+			config,
+		})
+	}
+
+	pub async fn run(self) -> Result<(), NfError<T::Error>> {
+		let shutdown_token = self.cancellation_token.clone();
+		let handle = tokio::spawn(async move {
+			use tokio::signal::unix::{SignalKind, signal};
+
+			// Infos here:
+			// https://www.gnu.org/software/libc/manual/html_node/Termination-Signals.html
+			let mut signal_terminate = signal(SignalKind::terminate()).unwrap();
+			let mut signal_interrupt = signal(SignalKind::interrupt()).unwrap();
+
+			tokio::select! {
+				_ = signal_terminate.recv() => tracing::debug!("Received SIGTERM."),
+				_ = signal_interrupt.recv() => tracing::debug!("Received SIGINT."),
+			};
+			shutdown_token.cancel();
+		});
+		let nf_app = T::initialize(self.config, self.cancellation_token)
+			.map_err(NfError::InitializationFailedError)?;
+
+		tokio::select! {
+			 _ = handle => {
+				nf_app.deregister_nf().await.map_err(NfError::ShutdownDeregistrationFailedError)
+			 },
+			 res = async {
+				nf_app.register_nf().await?;
+				nf_app.start().await?;
+				Ok(())
+			 } => {
+				let dreg_res = nf_app.deregister_nf().await;
+				if res.is_ok() && dreg_res.is_err() {
+					dreg_res.map_err(NfError::ShutdownDeregistrationFailedError)
+				} else if dreg_res.is_ok() && res.is_err() {
+					res.map_err(NfError::RuntimeError)
+				} else if let Err(dreg_err) = dreg_res {
+					res.map_err(|e| NfError::RuntimeWithDeregistrationError(e, dreg_err))
+				} else {
+					Ok(())
+				}
+			},
 		}
 	}
+}
+
+fn setup_logging(config: &LoggingConfig) -> Result<(), AppSetupError> {
+	install_tracing();
+	color_eyre::install()?;
+	Ok(())
+}
+
+fn setup_runtime(config: &RuntimeConfig) -> Result<Runtime, AppSetupError> {
+	trace!("Starting Tokio Runtime: {:?}", config.rt_type);
+	let rt = match config.rt_type {
+		RuntimeType::Multi => Builder::new_multi_thread().enable_all().build()?,
+		RuntimeType::Single => Builder::new_current_thread().enable_all().build()?,
+	};
+	Ok(rt)
+}
+
+fn install_tracing() {
+	let fmt_layer = tracing_subscriber::fmt::layer().with_target(false);
+	let filter_layer = EnvFilter::try_from_default_env()
+		.or_else(|_| EnvFilter::try_new("info"))
+		.unwrap();
+
+	tracing_subscriber::registry()
+		.with(filter_layer)
+		.with(fmt_layer)
+		.with(ErrorLayer::default())
+		.init();
 }

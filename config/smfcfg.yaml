@@ -7,8 +7,8 @@ configuration:
   sbi: # Service-based interface information
     scheme: http # the protocol for sbi (http or https)
     register_ip_v4: 127.0.0.2 # IP used to register to NRF
-    binding_ip_v4: 127.0.0.2 # IP used to bind the service
-    port: 8000 # Port used to bind the service
+    binding_ip_v4: 127.0.0.1 # IP used to bind the service
+    port: 3000 # Port used to bind the service
     tls: # the local path of TLS key
       key: cert/smf.key # SMF TLS Certificate
       pem: cert/smf.pem # SMF TLS Private key
@@ -73,20 +73,20 @@ configuration:
           - interface_type: N3 # the type of the interface (N3 or N9)
             endpoints: # the IP address of this N3/N9 interface on this UPF
               - 127.0.0.8
-            network_instances:  # Data Network Name (DNN)
+            network_instances: # Data Network Name (DNN)
               - internet
     links: # the topology graph of userplane, A and B represent the two nodes of each link
       - A: gNB1
         B: UPF
   # retransmission timer for pdu session modification command
   t3591:
-    enable: true     # true or false
-    expire_time: 16s   # default is 6 seconds
+    enable: true # true or false
+    expire_time: 16s # default is 6 seconds
     max_retry_times: 3 # the max number of retransmission
   # retransmission timer for pdu session release command
   t3592:
-    enable: true     # true or false
-    expire_time: 16s   # default is 6 seconds
+    enable: true # true or false
+    expire_time: 16s # default is 6 seconds
     max_retry_times: 3 # the max number of retransmission
   nrf_uri: http://127.0.0.10:8000 # a valid URI of NRF
   #urr_period: 10 # default usage report period in seconds
@@ -128,7 +128,7 @@ ue_routing_info: # the list of UE routing information
       - dest: 10.0.0.11/32 # the destination IP address on Data Network (DN)
         # the order of UPF nodes in this path. We use the UPF's name to represent each UPF node.
         # The UPF's name should be consistent with smfcfg.yaml
-        path: [ BranchingUPF, AnchorUPF2 ]
+        path: [BranchingUPF, AnchorUPF2]
 
 route_profile: # Maintains the mapping between RouteProfileID and ForwardingPolicyID of UPF
   mec1: # Route Profile identifier
@@ -140,3 +140,6 @@ pfd_data_for_app: # PFDs for an Application
       - pfd_id: pfd1 # PFD identifier
         flow_descriptions: # Represents a 3-tuple with protocol, server ip and server port for UL/DL application traffic
           - permit out ip from 10.60.0.1 8080 to any
+
+runtime:
+  type: multi

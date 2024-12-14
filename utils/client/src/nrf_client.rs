@@ -11,6 +11,7 @@ use oasbi::{
 		ServiceProperties,
 	},
 };
+
 use openapi_nrf::{
 	apis::{
 		nf_instance_id_document::{DeregisterNfInstanceResponse, RegisterNfInstanceResponse},
@@ -26,6 +27,7 @@ use openapi_nrf::{
 		SearchResult,
 	},
 };
+
 use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -58,6 +60,10 @@ pub struct NrfClient {
 }
 
 impl NrfClient {
+	pub fn new(client: Client) -> Self {
+		Self { client }
+	}
+
 	pub async fn search_nf_instance(
 		&self,
 		url: Url,
