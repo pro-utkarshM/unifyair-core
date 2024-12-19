@@ -6,7 +6,7 @@ members = [
     "lightning-nf/omnipath",
     # Remove Post testing
     "testing",
-    "utils/client", "utils/nf-base",
+    "utils/*",
 ]
 resolver = "2"
 
@@ -25,7 +25,6 @@ url = { version = "2.5.3" }
 pfcp = { path = "../pfcp/pfcp", package = "pfcp" }
 tower-http = { version = "0.6.1", features = ["full"] }
 bytes = { version = "1.8.0" }
-# pfcp-ie = { git = "ssh://git@bitbucket.org/blocknet/pfcp.git/", branch = "master", package = "ie" }
 tokio = { version = "1.38", features = ["full"] }
 chrono = { version = "0.4", default-features = false, features = ["serde"] }
 futures-core = "0.3"
@@ -37,14 +36,7 @@ reqwest = { version = "0.12.9", default-features = false, features = [
 ] }
 serde_json = "1.0"
 serde_urlencoded = "0.7.1"
-uuid = { version = "1.0", features = ["serde", "v4"] }
-oasbi = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", branch = "master", package = "oasbi" }
-openapi-smf = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", branch = "master", package = "openapi-smf", features = [
-    "server",
-] }
-openapi-nrf = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", branch = "master", package = "openapi-nrf", features = [
-    "server",
-] }
+uuid = { version = "1.0", features = ["serde", "v4", "v7"] }
 async-trait = "0.1"
 axum-extra = { version = "0.9", features = ["cookie", "multipart"] }
 axum = { version = "0.7" }
@@ -73,5 +65,20 @@ log = "0.4.21"
 enum-as-inner = "0.6.1"
 tokio-util = {version = "0.7.13", features = ["full"]}
 
-[net]
-git-fetch-with-cli = true
+oasbi = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", branch = "master", package = "oasbi" }
+openapi-smf = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", branch = "master", package = "openapi-smf", features = [
+    "server",
+] }
+openapi-chf = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", branch = "master", package = "openapi-chf", features = [
+    "server",
+] }
+openapi-pcf = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", branch = "master", package = "openapi-pcf", features = [
+    "server",
+] }
+openapi-udm = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", branch = "master", package = "openapi-udm", features = [
+    "server",
+] }
+openapi-nrf = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", branch = "master", package = "openapi-nrf", features = [
+    "server",
+] }
+ngap-models = { git = "ssh://git@github.com/UnifyAir/asn-models.git/", branch = "master", package = "ngap"}

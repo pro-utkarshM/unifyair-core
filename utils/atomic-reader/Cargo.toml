@@ -1,0 +1,23 @@
+[package]
+name = "atomic-reader"
+description = "Data structure for sync reading and asynchronous writing"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish.workspace = true
+
+[dependencies]
+loom = { version = "0.7", features = ["checkpoint", "futures"], optional = true }
+tokio  = {workspace = true, optional = true}
+
+[features]
+loom-testing = ["loom", "testing"]
+tokio-testing = ["tokio", "testing"]
+testing = []
+
+[dev-dependencies]
+
+
+
