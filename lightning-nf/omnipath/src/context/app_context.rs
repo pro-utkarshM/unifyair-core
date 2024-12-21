@@ -1,0 +1,145 @@
+use std::{net::IpAddr, ops::Deref, sync::Arc};
+
+use arc_swap::{ArcSwap, Guard};
+use oasbi::{
+	common::{Guami, NfInstanceId, Tai},
+	nrf::types::{IpEndPoint, NfService1, NfServiceStatus, NfServiceVersion, TransportProtocol},
+};
+use uuid::Uuid;
+
+use crate::config::{
+	Configuration as OmniPathInnerConfig,
+	OmniPathConfig,
+	PlmnSupportItem,
+	Sbi,
+	SerdeValidated,
+};
+
+#[derive(Debug, Default)]
+pub(crate) struct AppContextInner {
+	// 	tmsi_generator: IDGenerator,
+	// 	amf_ue_ngap_id_generator: IDGenerator,
+	// 	amf_status_subscription_id_generator: IDGenerator,
+	config: ArcSwap<Configuration>,
+	sbi: ArcSwap<Sbi>,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct Configuration {
+	pub(crate) name: String,
+	pub(crate) nf_id: NfInstanceId,
+	pub(crate) ngap_ips: Vec<IpAddr>,
+	pub(crate) served_guami_list: Vec<Guami>,
+	pub(crate) support_dnn_list: Vec<String>,
+	pub(crate) support_tai_list: Vec<Tai>,
+	pub(crate) plmn_support_list: Vec<PlmnSupportItem>,
+	pub(crate) tnl_weight_factor: u64,
+	pub(crate) nf_services: Vec<NfService1>,
+}
+
+impl AppContextInner {
+	pub fn initialize(config: &SerdeValidated<OmniPathConfig>) -> Self {
+		let mut context = Self::default();
+		context.set_config(config);
+		context
+	}
+
+	// TODO: Implement access trait for multiple config updates.
+	// TODO: Have only one central config
+	pub fn set_config(
+		&mut self,
+		valid_config: &SerdeValidated<OmniPathConfig>,
+	) {
+		let config = valid_config.inner();
+		let OmniPathInnerConfig {
+			amf_name: name,
+			ngap_ip_list: ngap_ips,
+			served_guami_list,
+			support_dnn_list,
+			support_tai_list,
+			plmn_support_list,
+			..
+		} = config.configuration.clone();
+		let nf_id = Uuid::now_v7();
+
+		let nf_services = Self::build_nf_services(valid_config);
+		let amf_config = Configuration {
+			name,
+			ngap_ips,
+			served_guami_list,
+			support_dnn_list,
+			support_tai_list,
+			plmn_support_list,
+			nf_services,
+			tnl_weight_factor: 0,
+			nf_id: NfInstanceId::from(nf_id),
+		};
+		self.config.swap(Arc::new(amf_config));
+		self.sbi.store(Arc::new(config.sbi.clone()));
+	}
+
+	/// Retrieves short-lived access to the configuration. Avoid storing the
+	/// returned reference.
+	pub fn get_config(&self) -> Guard<Arc<Configuration>> {
+		self.config.load()
+	}
+
+	/// Retrieves short-lived access to the Sbi configuration. Avoid storing the
+	/// returned reference.
+	pub fn get_sbi_config(&self) -> Guard<Arc<Sbi>> {
+		self.sbi.load()
+	}
+
+	pub fn build_nf_services(config: &SerdeValidated<OmniPathConfig>) -> Vec<NfService1> {
+		let config = config.inner();
+		let api_prefix = Some(config.sbi.get_ipv4_uri());
+		let version_uri = format!("v{}", config.info.version.major);
+		let service_list = config
+			.sbi
+			.service_name_list
+			.iter()
+			.enumerate()
+			.map(|(i, service_name)| -> NfService1 {
+				let nf_service = NfService1 {
+					api_prefix: api_prefix.clone(),
+					service_instance_id: i.to_string(),
+					service_name: service_name.to_owned(),
+					versions: vec![NfServiceVersion {
+						api_full_version: config.info.version.to_string(),
+						api_version_in_uri: version_uri.to_owned(),
+						expiry: None,
+					}],
+					scheme: config.sbi.scheme.clone(),
+					nf_service_status: NfServiceStatus::Registered,
+					ip_end_points: vec![IpEndPoint {
+						ipv4_address: Some(config.sbi.register_ipv4.into()),
+						transport: Some(TransportProtocol::Tcp),
+						port: Some(config.sbi.port),
+						..Default::default()
+					}],
+					..Default::default()
+				};
+				nf_service
+			})
+			.collect::<Vec<_>>();
+
+		service_list
+	}
+}
+
+#[derive(Clone)]
+pub(crate) struct AppContext(Arc<AppContextInner>);
+
+impl AppContext {
+	pub(crate) fn initialize(config: &SerdeValidated<OmniPathConfig>) -> Self {
+		let inner_context = AppContextInner::initialize(config);
+		Self(Arc::new(inner_context))
+	}
+}
+
+impl Deref for AppContext {
+	type Target = AppContextInner;
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
