@@ -3,7 +3,7 @@ use std::{backtrace::Backtrace, str::FromStr};
 use formatx::formatx;
 use oasbi::{
 	DeserResponse,
-	common::common_models::NfInstanceId,
+	common::NfInstanceId,
 	service_properties::{
 		NrfNFDiscoveryOperation,
 		NrfNFManagementOperation,
