@@ -11,7 +11,7 @@ use http::{
 
 use reqwest::Body; 
 
-use oasbi::{ReqError, common::common_models::ProblemDetails};
+use oasbi::{ReqError, common::ProblemDetails};
 use reqwest::{Client, Method, Request, Url};
 use serde::Serialize;
 use thiserror::Error;

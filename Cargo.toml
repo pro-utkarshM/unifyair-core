@@ -47,7 +47,7 @@ oauth2 = { version = "4.4.2" }
 tower = { version = "0.5.1", features = ["full"] }
 http = { version = "1.1.0" }
 pin-project-lite = "0.2.15"
-serde_with = { version = "3.11.0" }
+serde_with = { version = "3.11.0" , features = ["macros"]}
 formatx = { version = "0.2.2" }
 clap = { version = "4.5.4", features = ["cargo", "string"] }
 serde = { version = "1.0.197", features = ["derive"] }
@@ -63,7 +63,10 @@ bitvec = { version = "1.0.1", features = ["serde"] }
 smart-default = "0.7.1"
 log = "0.4.21"
 enum-as-inner = "0.6.1"
-tokio-util = {version = "0.7.13", features = ["full"]}
+tokio-util = { version = "0.7.13", features = ["full"] }
+arc-swap = "1.7.1"
+serde_valid = "0.25"
+versions = {  version = "6.3.2" , features = ["serde"]}
 
 oasbi = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", branch = "master", package = "oasbi" }
 openapi-smf = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", branch = "master", package = "openapi-smf", features = [
@@ -81,4 +84,4 @@ openapi-udm = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", branc
 openapi-nrf = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", branch = "master", package = "openapi-nrf", features = [
     "server",
 ] }
-ngap-models = { git = "ssh://git@github.com/UnifyAir/asn-models.git/", branch = "master", package = "ngap"}
+ngap-models = { git = "ssh://git@github.com/UnifyAir/asn-models.git/", branch = "master", package = "ngap" }

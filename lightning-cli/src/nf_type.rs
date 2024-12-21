@@ -5,7 +5,7 @@ use omnipath::OmniPathApp;
 use thiserror::Error;
 use tokio::runtime::{Builder, Runtime};
 use tokio_util::sync::CancellationToken;
-use tracing::trace;
+use tracing::{info, trace};
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -96,6 +96,7 @@ impl<T: NfInstance> NfApp<T> {
 	pub fn new(config_path: &str) -> Result<Self, AppSetupError> {
 		let mut file = File::open(config_path).expect("Failed to open config file");
 		let mut contents = String::new();
+		trace!("Going to parse config");
 		file.read_to_string(&mut contents)
 			.map_err(AppConfigError::from)?;
 		let config = serde_yaml::from_str(&contents).map_err(AppConfigError::from)?;
@@ -125,14 +126,16 @@ impl<T: NfInstance> NfApp<T> {
 		});
 		let nf_app = T::initialize(self.config, self.cancellation_token)
 			.map_err(NfError::InitializationFailedError)?;
-
+		info!("App Initialized Succesfully");
 		tokio::select! {
 			 _ = handle => {
 				nf_app.deregister_nf().await.map_err(NfError::ShutdownDeregistrationFailedError)
 			 },
 			 res = async {
 				nf_app.register_nf().await?;
+				info!("Nf Registered Succesfully");
 				nf_app.start().await?;
+				info!("Nf Started Succesfully");
 				Ok(())
 			 } => {
 				let dreg_res = nf_app.deregister_nf().await;
@@ -152,7 +155,6 @@ impl<T: NfInstance> NfApp<T> {
 
 fn setup_logging(config: &LoggingConfig) -> Result<(), AppSetupError> {
 	install_tracing();
-	color_eyre::install()?;
 	Ok(())
 }
 

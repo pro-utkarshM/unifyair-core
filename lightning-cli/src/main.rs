@@ -4,6 +4,7 @@ use clap::{crate_authors, crate_description, crate_name, crate_version};
 use lightning_cli::{app::get_clap_app, nf_type::App};
 
 fn main() -> color_eyre::Result<()> {
+	color_eyre::install()?;
 	let command = get_clap_app(
 		crate_name!(),
 		crate_description!(),
@@ -18,3 +19,4 @@ fn main() -> color_eyre::Result<()> {
 	App::start_app(nf_type, config_path)?;
 	Ok(())
 }
+
