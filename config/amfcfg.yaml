@@ -1,5 +1,5 @@
 info:
-  version: 1.0.9
+  version: 1.0.0
   description: AMF initial local configuration
 
 sbi: # Service-based interface information

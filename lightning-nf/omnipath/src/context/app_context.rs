@@ -5,6 +5,7 @@ use oasbi::{
 	common::{Guami, NfInstanceId, Tai},
 	nrf::types::{IpEndPoint, NfService1, NfServiceStatus, NfServiceVersion, TransportProtocol},
 };
+use oasbi::nrf::types::NfProfile1;
 use uuid::Uuid;
 
 use crate::config::{
@@ -24,7 +25,7 @@ pub(crate) struct AppContextInner {
 	sbi: ArcSwap<Sbi>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub(crate) struct Configuration {
 	pub(crate) name: String,
 	pub(crate) nf_id: NfInstanceId,
@@ -40,13 +41,13 @@ pub(crate) struct Configuration {
 impl AppContextInner {
 	pub fn initialize(config: &SerdeValidated<OmniPathConfig>) -> Self {
 		let mut context = Self::default();
-		context.set_config(config);
+		context.update_config(config);
 		context
 	}
 
 	// TODO: Implement access trait for multiple config updates.
 	// TODO: Have only one central config
-	pub fn set_config(
+	pub fn update_config(
 		&mut self,
 		valid_config: &SerdeValidated<OmniPathConfig>,
 	) {
@@ -90,6 +91,7 @@ impl AppContextInner {
 		self.sbi.load()
 	}
 
+
 	pub fn build_nf_services(config: &SerdeValidated<OmniPathConfig>) -> Vec<NfService1> {
 		let config = config.inner();
 		let api_prefix = Some(config.sbi.get_ipv4_uri());
@@ -125,6 +127,29 @@ impl AppContextInner {
 
 		service_list
 	}
+
+	/// Updates the configuration and commits the changes atomically.
+	///
+	/// This method takes a closure that modifies the Configuration, applies the changes,
+	/// and then commits the updated configuration atomically.
+	pub fn commit_config<F>(&self, update_fn: F)
+	where
+		F: FnOnce(&mut Configuration),
+	{
+		// Clone the current configuration for modification
+		let mut new_config = self.get_config().as_ref().clone();
+
+		// Apply the update function to modify the configuration
+		update_fn(&mut new_config);
+
+		// Commit the updated configuration atomically
+		self.config.store(Arc::new(new_config));
+	}
+
+	pub fn get_nf_id(&self) -> NfInstanceId {
+		self.get_config().nf_id
+	}
+
 }
 
 #[derive(Clone)]

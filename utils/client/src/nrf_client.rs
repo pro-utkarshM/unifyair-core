@@ -2,7 +2,6 @@ use std::{backtrace::Backtrace, str::FromStr};
 
 use formatx::formatx;
 use oasbi::{
-	DeserResponse,
 	common::NfInstanceId,
 	service_properties::{
 		NrfNFDiscoveryOperation,
@@ -10,8 +9,8 @@ use oasbi::{
 		NrfService,
 		ServiceProperties,
 	},
+	DeserResponse,
 };
-
 use openapi_nrf::{
 	apis::{
 		nf_instance_id_document::{DeregisterNfInstanceResponse, RegisterNfInstanceResponse},
@@ -27,12 +26,12 @@ use openapi_nrf::{
 		SearchResult,
 	},
 };
-
 use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-
-use crate::{GenericClientError, prepare_request};
+use tracing::trace;
+use uuid::Uuid;
+use crate::{prepare_request, GenericClientError};
 
 /// `TraitSatisfier` is an empty enum that exists solely to satisfy trait
 /// bounds.
@@ -71,7 +70,7 @@ impl NrfClient {
 		header: SearchNfInstancesHeaderParams,
 	) -> Result<SearchResult, NrfDiscoveryError> {
 		let nrf_service_properties =
-			NrfService::NFDiscovery(NrfNFDiscoveryOperation::Searchnfinstances);
+			NrfService::NFDiscovery(NrfNFDiscoveryOperation::SearchNFInstances);
 		let method = nrf_service_properties.get_http_method();
 		let path = nrf_service_properties.get_path();
 		let request = prepare_request(
@@ -115,15 +114,16 @@ impl NrfClient {
 	pub async fn register_nf_instance(
 		&self,
 		url: Url,
-		path: &RegisterNfInstancePathParams,
+		nf_instance_id: Uuid,
 		header: &RegisterNfInstanceHeaderParams,
 		body: &NfProfile1,
 	) -> Result<(NfProfile1, Option<NfInstanceId>), NrfManagementError> {
 		let nrf_service_properties =
-			NrfService::NFManagement(NrfNFManagementOperation::Registernfinstance);
+			NrfService::NFManagement(NrfNFManagementOperation::RegisterNFInstance);
 		let method = nrf_service_properties.get_http_method();
-		let path = formatx!(&nrf_service_properties.get_path(), path.nf_instance_id)
+		let path = formatx!(&nrf_service_properties.get_path(), nf_instance_id)
 			.map_err(GenericClientError::from)?;
+		trace!("path: {path:?}");
 		let request = prepare_request(
 			url,
 			&path,
@@ -145,16 +145,19 @@ impl NrfClient {
 			(_, RegisterNfInstanceResponse::Status200 { body, .. }) => Ok((body, None)),
 			(_, RegisterNfInstanceResponse::Status201 { body, location, .. }) => {
 				if let Some(index) = location.rfind('/') {
-					if let Ok(instance) = <NfInstanceId as FromStr>::from_str(&location[index..]) {
-						Ok((body, Some(instance)))
-					} else {
-						Err(NrfManagementError::InvalidLocationSent(
-							location,
-							Backtrace::capture(),
-						))
+					trace!("location string: {}", &location[index..]);
+					match NfInstanceId::from_str(&location[index + 1..]) {
+						Ok(instance) => Ok((body, Some(instance))),
+						Err(e) => {
+							return Err(NrfManagementError::InvalidLocationSent(
+								e,
+								location,
+								Backtrace::capture(),
+							));
+						}
 					}
 				} else {
-					Err(NrfManagementError::InvalidLocationSent(
+					Err(NrfManagementError::LocationParseError(
 						location,
 						Backtrace::capture(),
 					))
@@ -183,12 +186,12 @@ impl NrfClient {
 	pub async fn deregister_nf_instance(
 		&self,
 		url: Url,
-		path: &DeregisterNfInstancePathParams,
+		nf_instance_id: Uuid,
 	) -> Result<(), NrfManagementError> {
 		let nrf_service_properties =
-			NrfService::NFManagement(NrfNFManagementOperation::Deregisternfinstance);
+			NrfService::NFManagement(NrfNFManagementOperation::DeregisterNFInstance);
 		let method = nrf_service_properties.get_http_method();
-		let path = formatx!(&nrf_service_properties.get_path(), path.nf_instance_id)
+		let path = formatx!(&nrf_service_properties.get_path(), nf_instance_id)
 			.map_err(GenericClientError::from)?;
 		let request = prepare_request(
 			url,
@@ -251,8 +254,11 @@ pub enum NrfDiscoveryError {
 
 #[derive(Debug, Error)]
 pub enum NrfManagementError {
-	#[error("Invalid Location string: {0}")]
-	InvalidLocationSent(String, Backtrace),
+	#[error("Invalid Location string: {1}")]
+	InvalidLocationSent(#[source] uuid::Error, String, #[backtrace] Backtrace),
+
+	#[error("LocationParseError: Unable to get uuid from location {0}")]
+	LocationParseError(String, #[backtrace] Backtrace),
 
 	#[error(transparent)]
 	GenericClientError(
