@@ -230,6 +230,105 @@ impl NrfClient {
 			))?,
 		}
 	}
+
+	pub async fn authenticaion_request(
+		&self,
+		source_instance_id: NfInstanceId,
+		source_nf_type: NfType,
+		target_nf_type: NfType,
+		target_service_name: ServiceName,
+	) -> Result<AccessTokenRsp, NrfAuthorizationError> {
+		let mut token_req = AccessTokenReq::default();
+		token_req.target_nf_type = Some(target_nf_type);
+		token_req.nf_type = Some(source_nf_type);
+		token_req.nf_instance_id = source_instance_id;
+		token_req.scope = AccessTokenReqScope::from_str(&target_service_name.to_string())?;
+		let nrf_service_properties =
+			NrfService::AccessToken(NrfAccessTokenOperation::AccessTokenRequest);
+		let method = nrf_service_properties.get_http_method();
+		let path = nrf_service_properties.get_path();
+
+		let request = prepare_request(
+			self.init_config.url.clone(),
+			&path,
+			method,
+			Option::<&TraitSatisfier>::None,
+			Option::<&TraitSatisfier>::None,
+			Some(&token_req),
+			ContentType::APP_FORM,
+		)?;
+		let response = self
+			.client
+			.execute(request)
+			.await
+			.map_err(GenericClientError::from)?;
+
+		let (status_code, response) =
+			<AccessTokenRequestResponse as DeserResponse>::deserialize(response)
+				.await
+				.map_err(GenericClientError::from)?;
+
+		match (status_code.as_u16(), response) {
+			(_, AccessTokenRequestResponse::Status200 { body, .. }) => Ok(body),
+			(_, AccessTokenRequestResponse::Status400 { body, .. }) => {
+				Err(NrfAuthorizationError::AccessTokenError(body))
+			}
+			(status, AccessTokenRequestResponse::Status401(problem))
+			| (status, AccessTokenRequestResponse::Status403(problem))
+			| (status, AccessTokenRequestResponse::Status404(problem))
+			| (status, AccessTokenRequestResponse::Status411(problem))
+			| (status, AccessTokenRequestResponse::Status429(problem))
+			| (status, AccessTokenRequestResponse::Status500(problem))
+			| (status, AccessTokenRequestResponse::Status501(problem))
+			| (status, AccessTokenRequestResponse::Status503(problem)) => Err(
+				GenericClientError::InvalidResponse(status, Some(problem), Backtrace::capture()),
+			)?,
+			(status, _) => Err(GenericClientError::InvalidResponse(
+				status,
+				None,
+				Backtrace::capture(),
+			))?,
+		}
+	}
+}
+
+impl NrfClient {
+	pub async fn get_token<const T: NfType>(
+		&self,
+		target_service_name: ServiceName,
+	) -> Result<TokenEntry<AccessTokenRsp>, NrfAuthorizationError> {
+		let token_entry = self.nf_token_store.get(&target_service_name).await?;
+		match token_entry {
+			Some(entry) => Ok(entry),
+			None => {
+				let resp = self
+					.nf_token_store
+					.set(
+						target_service_name.clone(),
+						self.authenticaion_request(
+							self.nf_config.load().nf_instance_id,
+							self.init_config.source,
+							T,
+							target_service_name,
+						),
+					)
+					.await?;
+				Ok(resp)
+			}
+		}
+	}
+
+	pub async fn set_auth_token<const T: NfType>(
+		&self,
+		req: &mut Request,
+		service_name: ServiceName,
+	) -> Result<(), NrfAuthorizationError> {
+		if self.nf_config.load().oauth_enabled {
+			let token_entry = self.get_token::<T>(service_name).await?;
+			set_auth_token(req, token_entry)?;
+		}
+		Ok(())
+	}
 }
 
 #[derive(Debug, Error)]
@@ -266,4 +365,47 @@ pub enum NrfManagementError {
 		#[backtrace]
 		GenericClientError,
 	),
+
+	#[error("NrfAuthorizationError")]
+	NrfAuthorizationError(#[from] NrfAuthorizationError),
+}
+
+#[derive(Error, Debug)]
+pub enum NrfAuthorizationError {
+	#[error("InvalidRequestScope: Converting Services to token scope error")]
+	InvalidRequestScope(#[from] ConversionError),
+
+	#[error(transparent)]
+	GenericClientError(
+		#[from]
+		#[backtrace]
+		GenericClientError,
+	),
+
+	#[error("AccessTokenError: Nrf Token Api Error {0:?}")]
+	AccessTokenError(AccessTokenErr),
+
+	#[error("TokenStoreError: Oauth Token Store Error {0:?}")]
+	TokenStoreError(#[from] StoreError),
+
+	#[error("TokenParsingError: Invalid Auth Token ")]
+	TokenParsingError(#[from] header::InvalidHeaderValue),
+}
+
+pub(crate) fn set_auth_token(
+	req: &mut Request,
+	token_entry: TokenEntry<AccessTokenRsp>,
+) -> Result<(), header::InvalidHeaderValue> {
+	let token: &str = &token_entry.get().access_token;
+	let token_type = token_entry.get().token_type;
+	let token: String = match token_type {
+		AccessTokenRspTokenType::Bearer => {
+			let mut string = "Bearer ".to_owned();
+			string.push_str(token);
+			string
+		}
+	};
+	let headers_mut = req.headers_mut();
+	headers_mut.insert(AUTHORIZATION, token.try_into()?);
+	Ok(())
 }
