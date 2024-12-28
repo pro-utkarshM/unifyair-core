@@ -3,22 +3,26 @@
 #![feature(async_closure)]
 
 use std::{backtrace::Backtrace, error::Error, fmt::Debug};
+
 use http::{
 	Request as HttpRequest,
 	Version,
+	header::CONTENT_TYPE,
 	request::Builder as HttpReqBuilder,
 };
-
-use reqwest::Body; 
-
-use oasbi::{ReqError, common::ProblemDetails};
-use reqwest::{Client, Method, Request, Url};
+use oasbi::{common::{AccessTokenReq, ProblemDetails}, ReqError};
+use reqwest::{Body, Client, Method, Request, Url};
 use serde::Serialize;
 use thiserror::Error;
+use tracing::log::trace;
 
+mod content_type;
 mod header_map_serializer;
 pub mod nf_client;
 pub mod nrf_client;
+pub mod token_store;
+
+pub use content_type::ContentType;
 pub use header_map_serializer::{HeaderSerDeError, to_headers};
 
 pub struct NFConfig {}
@@ -53,42 +57,69 @@ where
 
 #[derive(Debug, Error)]
 pub enum GenericClientError {
-	#[error("Request Execution Failed")]
+	#[error("ClientRequestError: Request Execution Failed")]
 	ClientRequestError(#[from] reqwest::Error),
 
-	#[error("Response Parsing Failed")]
+	#[error("ResponseParseError: Response Parsing Failed")]
 	ResponseParseError(
 		#[from]
 		#[backtrace]
 		ReqError,
 	),
 
-	#[error("Response Failed with status: {0}")]
+	#[error("InvalidResponse: Response Failed with status: {0} {1:#?}")]
 	InvalidResponse(u16, Option<ProblemDetails>, #[backtrace] Backtrace),
 
-	#[error("Invalid Header: {0}")]
+	#[error("HeaderSerDeError: Invalid Header {0}")]
 	HeaderSerDeError(
 		#[from] header_map_serializer::HeaderSerDeError,
 		#[backtrace] Backtrace,
 	),
 
-	#[error("Invalid Query: {0}")]
+	#[error("QuerySerDeError: Invalid Query {0}")]
 	QuerySerDeError(#[from] serde_urlencoded::ser::Error),
 
-	#[error("Error while serializing body: {0}")]
+	#[error("QuerySerDeError: Invalid Form {0}")]
+	UrlFormEncodedError(#[from] serde_qs::Error),
+
+	#[error("SerializationError: Error while serializing body: {0}")]
 	SerializationError(#[from] serde_json::Error),
 
-	#[error("Error while preparing path: {0}")]
+	#[error("PathCreationError: Error while preparing path: {0}")]
 	PathCreationError(#[from] formatx::Error),
 
-	#[error("Error while building the request: {0}")]
+	#[error("BuilderError: Error while building the request: {0}")]
 	BuilderError(#[from] http::Error),
 
-	#[error("Error while building url: {0}")]
+	#[error("UriBuilderError: Error while building url: {0}")]
 	UriBuilderError(#[from] url::ParseError),
 
-	#[error("Error While making tower request: {0}")]
+	#[error("TowerHttpError: Error While making tower request: {0}")]
 	TowerHttpError(#[from] tower_reqwest::Error),
+}
+
+pub fn remove_leading_slash(input: &str) -> &str {
+	if input.starts_with('/') {
+		&input[1..]
+	} else {
+		input
+	}
+}
+
+pub fn serialize_body<B: Serialize>(
+	body: &B,
+	encoding_type: ContentType,
+) -> Result<Body, GenericClientError> {
+	let encoded = match encoding_type {
+		ContentType::APP_JSON => serde_json::to_vec(body)?,
+		ContentType::APP_FORM => {
+			let mut writer = vec![];
+			serde_qs::to_writer(body, &mut writer)?;
+			writer
+		}
+		_ => todo!(),
+	};
+	Ok(encoded.into())
 }
 
 pub fn prepare_request<H, Q, B>(
@@ -98,6 +129,7 @@ pub fn prepare_request<H, Q, B>(
 	header: Option<&H>,
 	query: Option<&Q>,
 	body: Option<&B>,
+	encoding_type: ContentType,
 ) -> Result<Request, GenericClientError>
 where
 	Q: Serialize,
@@ -105,7 +137,8 @@ where
 	B: Serialize,
 {
 	let mut url = url;
-	url.set_path(path);
+	url.set_path(remove_leading_slash(path));
+	trace!("Complete url: {path:?}");
 	let mut request = Request::new(method, url);
 	let mut pairs = request.url_mut().query_pairs_mut();
 	if query.is_some() {
@@ -117,8 +150,9 @@ where
 		.map(|h| to_headers(&h))
 		.transpose()?
 		.map(|h| request.headers_mut().extend(h));
+	request.headers_mut().insert(CONTENT_TYPE, encoding_type.to_header_value());
 	*request.body_mut() = body
-		.map(|t| serde_json::to_vec(t).map(|t| t.into()))
+		.map(|t| serialize_body(&t, encoding_type))
 		.transpose()?;
 	Ok(request)
 }
@@ -130,6 +164,7 @@ pub fn prepare_http_request<H, Q, B>(
 	header: Option<&H>,
 	query: Option<&Q>,
 	body: Option<&B>,
+	encoding_type: ContentType,
 ) -> Result<HttpRequest<Body>, GenericClientError>
 where
 	Q: Serialize,
@@ -149,14 +184,14 @@ where
 		.uri(url.to_string())
 		.method(method);
 
-	let body: Body = body.map_or(Ok(Body::default()), |t| {
-		serde_json::to_vec(t).map(|t| t.into())
-	})?;
+	let body: Body = body.map_or(Ok(Body::default()), |b| serialize_body(b, encoding_type))?;
 	let mut req = request.body(body)?;
 	header
 		.map(|h| to_headers(h))
 		.transpose()?
 		.map(|h| req.headers_mut().extend(h));
+    req.headers_mut().insert(CONTENT_TYPE, encoding_type.to_header_value());
 
 	Ok(req)
 }
+

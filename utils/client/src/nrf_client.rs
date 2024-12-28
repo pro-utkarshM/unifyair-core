@@ -1,37 +1,64 @@
-use std::{backtrace::Backtrace, str::FromStr};
+use std::{backtrace::Backtrace, str::FromStr, sync::Arc};
 
+use arc_swap::ArcSwap;
 use formatx::formatx;
+use http::{
+	HeaderValue,
+	header::{self, AUTHORIZATION, InvalidHeaderName},
+};
 use oasbi::{
-	common::NfInstanceId,
+	DeserResponse,
+	common::{
+		AccessTokenErr,
+		AccessTokenReq,
+		AccessTokenReqScope,
+		NfInstanceId,
+		NfType,
+		error::ConversionError,
+	},
 	service_properties::{
+		NrfAccessTokenOperation,
 		NrfNFDiscoveryOperation,
 		NrfNFManagementOperation,
 		NrfService,
 		ServiceProperties,
 	},
-	DeserResponse,
 };
 use openapi_nrf::{
 	apis::{
+		access_token_request::AccessTokenRequestResponse,
 		nf_instance_id_document::{DeregisterNfInstanceResponse, RegisterNfInstanceResponse},
 		nf_instances_store::SearchNfInstancesResponse,
 	},
 	models::{
+		AccessTokenRsp,
+		AccessTokenRspTokenType,
 		DeregisterNfInstancePathParams,
 		NfProfile1,
+		NfService,
+		NfService1,
+		NfServiceInstance,
 		RegisterNfInstanceHeaderParams,
 		RegisterNfInstancePathParams,
 		SearchNfInstancesHeaderParams,
 		SearchNfInstancesQueryParams,
 		SearchResult,
+		ServiceName,
 	},
 };
-use reqwest::{Client, Url};
+use reqwest::{Client, Request, Url};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use thiserror::Error;
 use tracing::trace;
 use uuid::Uuid;
-use crate::{prepare_request, GenericClientError};
+
+use crate::{
+	ContentType,
+	GenericClientError,
+	prepare_request,
+	token_store::{StoreError, TokenEntry, TokenState, TokenStore},
+};
 
 /// `TraitSatisfier` is an empty enum that exists solely to satisfy trait
 /// bounds.
@@ -41,31 +68,79 @@ use crate::{prepare_request, GenericClientError};
 /// for types or generics that require `Serialize`, `Deserialize`, or `Debug`
 /// implementations without having any runtime functionality.
 ///
-/// # Example
-/// ```
-/// use my_crate::TraitSatisfier;
-///
-/// // This can be used in generic contexts where trait bounds need to be fulfilled
-/// // without creating an actual instance.
-/// ```
 ///
 /// Since `TraitSatisfier` has no variants, it cannot be
 /// instantiated.
 #[derive(Serialize, Deserialize, Debug)]
 pub enum TraitSatisfier {}
 
+pub struct InitConfig {
+	pub url: Url,
+
+	// TODO: Convert this to const generic parameter `source: const S: NfType`
+	// once const generics feature stabilizes for associated types and complex constants.
+	// This will provide compile-time guarantees for NF type consistency and eliminate runtime
+	// loads.
+	pub source: NfType,
+}
+
+/// Configuration that gets populated after successful NF Instance registration
+/// with NRF.
+///
+/// This config maintains runtime state that is established during NF
+/// registration:
+/// - heartbeat_timer: The keep-alive interval received from NRF
+/// - nf_instance_id: The assigned NF Instance ID after successful registration
+///
+/// Note: While this struct can be Default-initialized, its actual values are
+/// meant to be updated post-registration with values received from the NRF.
+#[derive(Default, Debug)]
+pub struct NfConfig {
+	pub heartbeat_timer: u64,
+	pub nf_instance_id: NfInstanceId,
+	pub oauth_enabled: bool,
+}
+
 pub struct NrfClient {
 	client: Client,
+	init_config: InitConfig,
+	nf_config: ArcSwap<NfConfig>,
+	nf_token_store: TokenStore<ServiceName, AccessTokenRsp>,
 }
 
 impl NrfClient {
-	pub fn new(client: Client) -> Self {
-		Self { client }
+	fn get_nf_id(&self) -> NfInstanceId {
+		self.nf_config.load().nf_instance_id
+	}
+
+	fn get_heartbeat_timer(&self) -> u64 {
+		self.nf_config.load().heartbeat_timer
+	}
+
+	#[inline]
+	fn get_oauth_enabled(&self) -> bool {
+		self.nf_config.load().oauth_enabled
+	}
+}
+
+impl NrfClient {
+	pub fn new(
+		client: Client,
+		url: Url,
+		source: NfType,
+	) -> Self {
+		let init_config = InitConfig { url, source };
+
+		Self {
+			client,
+			init_config,
+			nf_config: ArcSwap::from_pointee(NfConfig::default()),
+			nf_token_store: TokenStore::new(),
+		}
 	}
 
 	pub async fn search_nf_instance(
 		&self,
-		url: Url,
 		query: SearchNfInstancesQueryParams,
 		header: SearchNfInstancesHeaderParams,
 	) -> Result<SearchResult, NrfDiscoveryError> {
@@ -74,12 +149,13 @@ impl NrfClient {
 		let method = nrf_service_properties.get_http_method();
 		let path = nrf_service_properties.get_path();
 		let request = prepare_request(
-			url,
+			self.init_config.url.clone(),
 			&path,
 			method,
 			Some(&header),
 			Some(&query),
 			Option::<&TraitSatisfier>::None,
+			ContentType::APP_FORM,
 		)?;
 		let response = self
 			.client
@@ -113,24 +189,24 @@ impl NrfClient {
 
 	pub async fn register_nf_instance(
 		&self,
-		url: Url,
-		nf_instance_id: Uuid,
+		nf_instance_id: NfInstanceId,
 		header: &RegisterNfInstanceHeaderParams,
 		body: &NfProfile1,
 	) -> Result<(NfProfile1, Option<NfInstanceId>), NrfManagementError> {
 		let nrf_service_properties =
 			NrfService::NFManagement(NrfNFManagementOperation::RegisterNFInstance);
 		let method = nrf_service_properties.get_http_method();
-		let path = formatx!(&nrf_service_properties.get_path(), nf_instance_id)
+		let path = formatx!(&nrf_service_properties.get_path(), nf_instance_id.0)
 			.map_err(GenericClientError::from)?;
 		trace!("path: {path:?}");
 		let request = prepare_request(
-			url,
+			self.init_config.url.clone(),
 			&path,
 			method,
 			Some(header),
 			Option::<&TraitSatisfier>::None,
 			Some(body),
+			ContentType::APP_JSON,
 		)?;
 		let response = self
 			.client
@@ -141,7 +217,7 @@ impl NrfClient {
 			<RegisterNfInstanceResponse as DeserResponse>::deserialize(response)
 				.await
 				.map_err(GenericClientError::from)?;
-		match (status_code.as_u16(), response) {
+		let res = match (status_code.as_u16(), response) {
 			(_, RegisterNfInstanceResponse::Status200 { body, .. }) => Ok((body, None)),
 			(_, RegisterNfInstanceResponse::Status201 { body, location, .. }) => {
 				if let Some(index) = location.rfind('/') {
@@ -180,32 +256,53 @@ impl NrfClient {
 				None,
 				Backtrace::capture(),
 			))?,
-		}
+		};
+		res.map(|(nf, id)| {
+			let heartbeat_timer = nf
+				.get()
+				.heart_beat_timer
+				.as_ref()
+				.map_or(0u64, move |v| u64::from(*v));
+			let oauth_enabled = match nf.get().custom_info.get("oauth2") {
+				Some(Value::Bool(true)) => true,
+				_ => false,
+			};
+			let nf_id = id.map_or(nf_instance_id, |id| id);
+			let nf_config = NfConfig {
+				oauth_enabled,
+				heartbeat_timer,
+				nf_instance_id: nf_id,
+			};
+			self.nf_config.store(Arc::new(nf_config));
+			trace!("NfConfig Updated: {:#?}", self.nf_config.load());
+			(nf, id)
+		})
 	}
 
-	pub async fn deregister_nf_instance(
-		&self,
-		url: Url,
-		nf_instance_id: Uuid,
-	) -> Result<(), NrfManagementError> {
+	pub async fn deregister_nf_instance(&self) -> Result<(), NrfManagementError> {
 		let nrf_service_properties =
 			NrfService::NFManagement(NrfNFManagementOperation::DeregisterNFInstance);
 		let method = nrf_service_properties.get_http_method();
-		let path = formatx!(&nrf_service_properties.get_path(), nf_instance_id)
+		let nf_instance_id = self.get_nf_id();
+		let path = formatx!(&nrf_service_properties.get_path(), nf_instance_id.0)
 			.map_err(GenericClientError::from)?;
-		let request = prepare_request(
-			url,
+		let mut request = prepare_request(
+			self.init_config.url.clone(),
 			&path,
 			method,
 			Option::<&TraitSatisfier>::None,
 			Option::<&TraitSatisfier>::None,
 			Option::<&TraitSatisfier>::None,
+			ContentType::APP_JSON,
 		)?;
+		self.set_auth_token::<{ NfType::Nrf }>(&mut request, ServiceName::NnrfNfm)
+			.await?;
 		let response = self
 			.client
 			.execute(request)
 			.await
 			.map_err(GenericClientError::from)?;
+
 		let (status_code, response) =
 			<DeregisterNfInstanceResponse as DeserResponse>::deserialize(response)
 				.await

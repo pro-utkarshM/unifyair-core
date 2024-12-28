@@ -1,10 +1,14 @@
-use std::{iter::once, sync::Arc};
+use std::{convert::Infallible, iter::once, net::SocketAddr, ops::AsyncFn, sync::Arc};
 
+use bytes::Bytes;
 use http::{
+	Method,
 	Request as HttpRequest,
 	Response as HttpResponse,
 	StatusCode,
-	header::AUTHORIZATION,
+	Version,
+	header::{AUTHORIZATION, CONTENT_TYPE, HeaderName},
+	request::Builder as HttpReqBuilder,
 }; use http_body_util::BodyExt;
 use oasbi::{DeserResponse, common::NfType, nrf::types::NfProfile};
 use openapi_nrf::models::{
@@ -12,18 +16,26 @@ use openapi_nrf::models::{
 	SearchNfInstancesQueryParams,
 	SearchResult,
 };
-use reqwest::{Body, Client, ClientBuilder, Response};
+use reqwest::{Body, Client, ClientBuilder, Request, Response};
 use serde::Serialize;
 use thiserror::Error;
 use tower::{
+	BoxError,
 	Service,
 	ServiceBuilder,
 	ServiceExt,
+	service_fn,
+	util::{MapRequestLayer, ServiceFn},
 };
 use tower_http::{
+	add_extension::AddExtensionLayer,
 	classify::{ServerErrorsAsFailures, SharedClassifier},
+	compression::CompressionLayer,
+	propagate_header::PropagateHeaderLayer,
 	sensitive_headers::{SetSensitiveRequestHeaders, SetSensitiveRequestHeadersLayer},
+	set_header::{SetRequestHeader, SetResponseHeaderLayer},
 	trace::{Trace, TraceLayer},
+	validate_request::ValidateRequestHeaderLayer,
 };
 use tower_reqwest::{HttpClientLayer, HttpClientService};
 use url::Url;
@@ -31,6 +43,7 @@ use url::Url;
 use crate::{
 	GenericClientError,
 	nrf_client::{NrfClient, NrfDiscoveryError},
+	to_headers,
 };
 
 pub trait ApiBaseUrl {
@@ -74,13 +87,13 @@ where
 		nrf_client: Arc<NrfClient>,
 		controller: T,
 	) -> Result<Self, NfClientError> {
-		let url = controller.base_url();
+		// let url = controller.base_url();
 		let search_params = controller.get_search_params(APP_TYPE);
 		let header_params = SearchNfInstancesHeaderParams {
 			..Default::default()
 		};
 		let search_result = nrf_client
-			.search_nf_instance(url, search_params, header_params)
+			.search_nf_instance(search_params, header_params)
 			.await?;
 		let nf_profile = controller.profile_selection(search_result);
 		let builder = ClientBuilder::new();
