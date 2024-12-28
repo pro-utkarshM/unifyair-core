@@ -1,11 +1,8 @@
 [workspace]
 members = [
     "lightning-cli",
-    "lightning-nf/datawarp",
-    "lightning-nf/infinisync",
     "lightning-nf/omnipath",
     # Remove Post testing
-    "testing",
     "utils/*",
 ]
 resolver = "2"
