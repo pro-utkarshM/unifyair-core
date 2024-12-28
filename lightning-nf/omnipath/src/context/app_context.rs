@@ -61,7 +61,7 @@ impl AppContextInner {
 			plmn_support_list,
 			..
 		} = config.configuration.clone();
-		let nf_id = Uuid::now_v7();
+		let nf_id = Uuid::new_v4();
 
 		let nf_services = Self::build_nf_services(valid_config);
 		let amf_config = Configuration {

@@ -71,19 +71,19 @@ pub enum NfError<T> {
 		#[source]
 		T,
 	),
-	#[error("Running NF Error: {0}")]
+	#[error("RuntimeError: Running NF Error")]
 	RuntimeError(
 		#[backtrace]
 		#[source]
 		T,
 	),
-	#[error("Deregistration NF Error: {0}")]
+	#[error("ShutdownDeregistrationFailedError: Deregistration NF Error")]
 	ShutdownDeregistrationFailedError(
 		#[backtrace]
 		#[source]
 		T,
 	),
-	#[error("Runtime error and unable to deregister : {0} {1}")]
+	#[error("RuntimeWithDeregistrationError: Runtime error and unable to deregister : \nMain App Error - {0} \nDeregisteration Error {1}")]
 	RuntimeWithDeregistrationError(
 		#[backtrace]
 		#[source]
@@ -126,16 +126,16 @@ impl<T: NfInstance> NfApp<T> {
 		});
 		let nf_app = T::initialize(self.config, self.cancellation_token)
 			.map_err(NfError::InitializationFailedError)?;
-		info!("App Initialized Succesfully");
+		info!("App Initialized Successfully");
 		tokio::select! {
 			 _ = handle => {
 				nf_app.deregister_nf().await.map_err(NfError::ShutdownDeregistrationFailedError)
 			 },
 			 res = async {
 				nf_app.register_nf().await?;
-				info!("Nf Registered Succesfully");
+				info!("Nf Registered Successfully");
 				nf_app.start().await?;
-				info!("Nf Started Succesfully");
+				info!("Nf Started Successfully");
 				Ok(())
 			 } => {
 				let dreg_res = nf_app.deregister_nf().await;
@@ -146,6 +146,7 @@ impl<T: NfInstance> NfApp<T> {
 				} else if let Err(dreg_err) = dreg_res {
 					res.map_err(|e| NfError::RuntimeWithDeregistrationError(e, dreg_err))
 				} else {
+					info!("Nf Deregistered Successfully");
 					Ok(())
 				}
 			},

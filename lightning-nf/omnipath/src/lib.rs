@@ -10,6 +10,7 @@ use std::{rc::Rc, sync::Arc};
 use client::nrf_client::{NrfClient, NrfManagementError};
 use config::OmniPathConfig;
 use nf_base::NfInstance;
+use oasbi::common::NfType;
 use openapi_nrf::models::RegisterNfInstanceHeaderParams;
 use reqwest::{Client, Url};
 use thiserror::Error;
@@ -21,6 +22,8 @@ use crate::{
 	context::app_context::{AppContext, Configuration},
 	models::sbi::ModelBuildError,
 };
+
+const SOURCE_TYPE: NfType = NfType::Amf;
 
 #[derive(Error, Debug)]
 pub enum OmniPathError {
@@ -46,6 +49,9 @@ pub enum OmniPathConfigError {
 
 	#[error("InvalidConfig: Invalid Configuration")]
 	InvalidConfig(#[from] serde_valid::validation::Errors),
+
+	#[error("ClientBuildError: Error While Building the nrf client")]
+	ClientBuildError(#[from] reqwest::Error),
 }
 
 #[derive(Error, Debug)]
@@ -62,19 +68,41 @@ pub enum NrfError {
 }
 
 pub struct OmniPathApp {
-	nrf_url: Url,
 	nrf_client: Arc<NrfClient>,
 	config: Rc<SerdeValidated<OmniPathConfig>>,
 	shutdown: CancellationToken,
 	app_context: AppContext,
 }
 
-pub fn create_nrf_client() -> Client {
-	Client::builder()
+pub fn create_nrf_client(url: Url) -> Result<NrfClient, OmniPathConfigError> {
+	let client = Client::builder()
 		.connection_verbose(true)
 		// .https_only(true)
-		.build()
-		.unwrap()
+		.build()?;
+	Ok(NrfClient::new(client, url, SOURCE_TYPE))
+}
+
+fn find_diff<'a, T: serde::Serialize>(
+	v1: &'a T,
+	v2: &'a T,
+) -> String {
+	macro_rules! try_with_err_msg {
+		($expr:expr, $msg:expr) => {
+			match $expr {
+				Ok(val) => val,
+				Err(err) => {
+					let err_str = format!("{}: {}", $msg, err.to_string());
+					return err_str;
+				}
+			}
+		};
+	}
+
+	let v1 = try_with_err_msg!(serde_json::to_value(v1), "Error While Serializing");
+	let v2 = try_with_err_msg!(serde_json::to_value(v2), "Error While Serializing");
+	let mut d = treediff::tools::Recorder::default();
+	treediff::diff(&v1, &v2, &mut d);
+	format!("{:#?}", d)
 }
 
 impl NfInstance for OmniPathApp {
@@ -88,12 +116,12 @@ impl NfInstance for OmniPathApp {
 		let nrf_uri = &config.configuration.nrf_uri.to_string();
 		let nrf_url = Url::parse(nrf_uri)
 			.map_err(|e| OmniPathConfigError::InvalidNrfUriError(e, nrf_uri.to_owned()))?;
-		let nrf_client = Arc::new(NrfClient::new(create_nrf_client()));
+		let nrf_client = create_nrf_client(nrf_url)?;
+		let nrf_client = Arc::new(nrf_client);
 		let valid_config =
 			SerdeValidated::new(config).map_err(OmniPathConfigError::InvalidConfig)?;
 		let app_context = AppContext::initialize(&valid_config);
 		Ok(Self {
-			nrf_url,
 			nrf_client,
 			config: Rc::new(valid_config),
 			shutdown,
@@ -110,11 +138,10 @@ impl NfInstance for OmniPathApp {
 			.app_context
 			.build_nf_profile()
 			.map_err(NrfError::from)?;
-		let nf_instance_id = self.app_context.get_nf_id().0;
-		let (nf_profile, instance_id) = self
+		let nf_instance_id = self.app_context.get_nf_id();
+		let (nf_profile_resp, instance_id) = self
 			.nrf_client
 			.register_nf_instance(
-				self.nrf_url.clone(),
 				nf_instance_id,
 				&RegisterNfInstanceHeaderParams::default(),
 				&nf_profile,
@@ -122,7 +149,10 @@ impl NfInstance for OmniPathApp {
 			.await
 			.map_err(NrfError::from)?;
 		info!("Nrf Nf Id: {:#?}", instance_id);
-		info!("Nrf Profile Response: {:#?}", nf_profile);
+		info!(
+			"Nrf Profile Response Diff: {}",
+			&find_diff(&nf_profile, &nf_profile_resp)
+		);
 		if let Some(nf_id) = instance_id {
 			if (nf_id == self.app_context.get_nf_id()) {
 				let update_config_fn = move |config: &mut Configuration| {
@@ -137,7 +167,7 @@ impl NfInstance for OmniPathApp {
 	async fn deregister_nf(&self) -> Result<(), Self::Error> {
 		let nf_instance_id = self.app_context.get_nf_id().0;
 		self.nrf_client
-			.deregister_nf_instance(self.nrf_url.clone(), nf_instance_id)
+			.deregister_nf_instance()
 			.await
 			.map_err(NrfError::from)?;
 		Ok(())
