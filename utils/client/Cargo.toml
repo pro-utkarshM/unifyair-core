@@ -28,3 +28,20 @@ formatx.workspace = true
 hyper-util = "0.1.10"
 tower-reqwest.workspace = true
 url.workspace = true
+uuid.workspace = true
+tracing.workspace = true
+mediatype.workspace = true
+serde_qs.workspace = true
+scc.workspace = true
+arc-swap.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+criterion = { version = "0.5.1", features = ["async_tokio", "csv_output"] }
+dashmap = "6.1.0"
+futures = "0.3"
+
+
+[[bench]]
+name = "token_store_bench"
+harness = false
