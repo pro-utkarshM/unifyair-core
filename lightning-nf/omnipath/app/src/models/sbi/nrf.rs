@@ -2,24 +2,24 @@ use std::ops::Deref;
 
 use oasbi::{
 	common::NfType,
-	nrf::types::{NfProfile, NfProfile1Unchecked, NfStatus, AmfInfo},
+	nrf::types::{AmfInfo, NfProfile, NfProfile1Unchecked, NfStatus},
 };
 use openapi_nrf::models::NfProfile1;
+use tracing::{info, trace};
 
 use crate::{context::app_context::AppContext, models::sbi::ModelBuildError};
-use tracing::{trace, info};
 
 impl AppContext {
 	pub fn build_nf_profile(&self) -> Result<NfProfile1, ModelBuildError> {
 		let config = self.get_config();
 		let sbi = self.get_sbi_config();
-        let amf_id = config.served_guami_list[0].amf_id;
+		let amf_id = config.served_guami_list[0].amf_id;
 		let amf_info = AmfInfo {
-            amf_region_id: amf_id.region_id,
-            amf_set_id: amf_id.set_id,
-		    guami_list: config.served_guami_list.clone(),
-		    tai_list: config.support_tai_list.clone(),
-		    ..Default::default()
+			amf_region_id: amf_id.region_id,
+			amf_set_id: amf_id.set_id,
+			guami_list: config.served_guami_list.clone(),
+			tai_list: config.support_tai_list.clone(),
+			..Default::default()
 		};
 		let plmn_list = config
 			.plmn_support_list

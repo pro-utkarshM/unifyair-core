@@ -10,7 +10,6 @@ publish = { workspace = true }
 
 [dependencies]
 clap = { workspace = true }
-omnipath = { path = "../lightning-nf/omnipath" }
 tokio = { workspace = true, features = ["full"] }
 serde_yaml = { workspace = true }
 thiserror.workspace = true
@@ -20,3 +19,4 @@ tracing.workspace = true
 tracing-error.workspace = true
 nf-base = { path = "../utils/nf-base" }
 tokio-util.workspace = true
+omnipath = { path = "../lightning-nf/omnipath/app", package = "omnipath-app" }

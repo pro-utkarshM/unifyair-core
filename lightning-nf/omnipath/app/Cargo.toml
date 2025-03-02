@@ -1,5 +1,5 @@
 [package]
-name = "omnipath"
+name = "omnipath-app"
 description = "high performance amf repo"
 edition.workspace = true
 authors.workspace = true
@@ -25,14 +25,12 @@ bytes.workspace = true
 thiserror.workspace = true
 tower-http.workspace = true
 tower.workspace = true
-client = { path = "../../utils/client" }
 log.workspace = true
 enum-as-inner.workspace = true
 smart-default.workspace = true
 asn1-codecs.workspace = true
 bitvec.workspace = true
 asn1_codecs_derive.workspace = true
-nf-base = { path = "../../utils/nf-base" }
 tokio-util.workspace = true
 reqwest.workspace = true
 url.workspace = true
@@ -41,7 +39,15 @@ ngap-models.workspace = true
 arc-swap.workspace = true
 serde_valid.workspace = true
 tracing.workspace = true
-versions.workspace = true
 serde_with.workspace = true
 serde_json = "1.0.134"
 treediff.workspace = true
+tokio-sctp.workspace = true
+socket2.workspace = true
+rustc-hash.workspace = true
+solana-nohash-hasher.workspace = true
+
+config = { path = "../config", package = "omnipath-config" }
+counter = { path = "../../../utils/counter" }
+client = { path = "../../../utils/client" }
+nf-base = { path = "../../../utils/nf-base" }

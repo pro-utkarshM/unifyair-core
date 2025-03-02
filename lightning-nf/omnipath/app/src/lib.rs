@@ -1,9 +1,8 @@
 #![feature(error_generic_member_access)]
 
-pub mod config;
+pub use config;
 pub(crate) mod context;
 pub mod models;
-pub mod ngap;
 
 use std::{rc::Rc, sync::Arc};
 

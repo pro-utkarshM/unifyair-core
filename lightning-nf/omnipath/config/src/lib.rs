@@ -7,7 +7,8 @@ use oasbi::{
 };
 use serde::{Deserialize, Serialize};
 use serde_valid::Validate;
-use serde_with::{serde_as, DisplayFromStr};
+use serde_with::{DisplayFromStr, serde_as};
+use tokio_sctp::InitMsg;
 
 #[derive(Serialize, Deserialize, Debug, Validate)]
 #[serde(rename_all = "camelCase")]
@@ -45,6 +46,7 @@ pub struct Configuration {
 	#[validate(min_items = 1)]
 	pub support_dnn_list: Vec<String>,
 	pub nrf_uri: Uri,
+	pub sctp: SCTP,
 	// 	pub security: NasSecurity,
 	// 	pub network_name: NetworkName,
 	// 	pub t3502_value: u16,
@@ -58,7 +60,6 @@ pub struct Configuration {
 	// 	pub t3565: Timer,
 	// 	pub t3570: Timer,
 	// 	pub locality: String,
-	// 	pub sctp: SCTP,
 	// 	pub default_ue_ctx_req: bool,
 }
 
@@ -166,10 +167,21 @@ pub struct Timer {
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 #[serde(rename_all = "camelCase")]
 pub struct SCTP {
-	num_ostreams: u8,
-	max_instreams: u8,
-	max_attempts: u8,
-	max_init_timeout: u8,
+	num_ostreams: u16,
+	max_instreams: u16,
+	max_attempts: u16,
+	max_init_timeout: u16,
+}
+
+impl Into<InitMsg> for &SCTP {
+	fn into(self) -> InitMsg {
+		InitMsg {
+			num_ostreams: self.num_ostreams,
+			max_instreams: self.max_instreams,
+			max_attempts: self.max_attempts,
+			max_init_timeout: self.max_init_timeout,
+		}
+	}
 }
 
 impl NfConfig for OmniPathConfig {
@@ -182,7 +194,7 @@ impl NfConfig for OmniPathConfig {
 }
 
 impl Sbi {
-	pub(crate) fn get_ipv4_uri(&self) -> String {
+	pub fn get_ipv4_uri(&self) -> String {
 		format!(
 			"{}://{}:{}",
 			self.scheme.to_string(),
@@ -202,10 +214,6 @@ fn display_slice<T: ToString>(input: &[T]) -> String {
 
 pub struct SerdeValidated<T>(T);
 impl<T: Validate> SerdeValidated<T> {
-//	pub fn new(value: &T) -> Result<&Self, serde_valid::validation::Errors> {
-//		value.validate()?;
-//		Ok(&SerdeValidated(value))
-//	}
 
 	pub fn new(value: T) -> Result<Self, serde_valid::validation::Errors> {
 		value.validate()?;
