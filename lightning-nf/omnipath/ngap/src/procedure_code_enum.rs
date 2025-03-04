@@ -2,7 +2,7 @@ use std::convert::TryFrom;
 
 use thiserror::Error;
 
-use super::ProcedureCode;
+use ngap_models::ProcedureCode;
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]

@@ -1,8 +1,8 @@
 [workspace]
 members = [
     "lightning-cli",
-    "lightning-nf/omnipath",
-    # Remove Post testing
+    "lightning-nf/omnipath/app", "lightning-nf/omnipath/config",
+    "lightning-nf/omnipath/ngap",
     "utils/*",
 ]
 resolver = "2"
@@ -16,6 +16,7 @@ repository = "https://bitbucket.org/blocknet/unifyair-core"
 homepage = "https://unifyair.com/"
 description = "UnifyAir 5g Core"
 publish = false
+readme = "README.md"
 
 [workspace.dependencies]
 url = { version = "2.5.3" }
@@ -68,6 +69,11 @@ versions = { version = "6.3.2", features = ["serde"] }
 treediff = { version = "5.0.0", features = ["serde_json", "with-serde-json"] }
 mediatype = "0.19"
 scc = "2.2.6"
+rustc-hash = "2.1"
+solana-nohash-hasher = "0.2.1"
+tokio-sctp = "0.1.0"
+# Depenedency of tokio-sctp
+socket2 = "0.4"
 
 oasbi = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", branch = "master", package = "oasbi" }
 openapi-smf = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", branch = "master", package = "openapi-smf", features = [

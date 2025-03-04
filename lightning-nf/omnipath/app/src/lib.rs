@@ -21,6 +21,7 @@ use crate::{
 	context::app_context::{AppContext, Configuration},
 	models::sbi::ModelBuildError,
 };
+use ngap::{Network, NetworkError};
 
 const SOURCE_TYPE: NfType = NfType::Amf;
 
@@ -39,6 +40,9 @@ pub enum OmniPathError {
 		#[backtrace]
 		NrfError,
 	),
+
+	#[error("NgapNetworkError: Ngap Network Error")]
+	NgapNetworkError(#[from] NetworkError),
 }
 
 #[derive(Error, Debug)]
@@ -71,6 +75,7 @@ pub struct OmniPathApp {
 	config: Rc<SerdeValidated<OmniPathConfig>>,
 	shutdown: CancellationToken,
 	app_context: AppContext,
+	ngap_network: Arc<Network>,
 }
 
 pub fn create_nrf_client(url: Url) -> Result<NrfClient, OmniPathConfigError> {
@@ -120,11 +125,19 @@ impl NfInstance for OmniPathApp {
 		let valid_config =
 			SerdeValidated::new(config).map_err(OmniPathConfigError::InvalidConfig)?;
 		let app_context = AppContext::initialize(&valid_config);
+
+		let ngap_network = Network::new(
+			app_context.get_config().ngap_ips[0],
+			app_context.get_config().ngap_port,
+			&valid_config.inner().configuration.sctp,
+		)?;
+
 		Ok(Self {
 			nrf_client,
-			config: Rc::new(valid_config),
 			shutdown,
 			app_context,
+			config: Rc::new(valid_config),
+			ngap_network: Arc::new(ngap_network),
 		})
 	}
 
@@ -153,7 +166,7 @@ impl NfInstance for OmniPathApp {
 			&find_diff(&nf_profile, &nf_profile_resp)
 		);
 		if let Some(nf_id) = instance_id {
-			if (nf_id == self.app_context.get_nf_id()) {
+			if nf_id == self.app_context.get_nf_id() {
 				let update_config_fn = move |config: &mut Configuration| {
 					config.nf_id = nf_id;
 				};

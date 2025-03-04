@@ -12,7 +12,7 @@ use crate::config::{
 	Configuration as OmniPathInnerConfig,
 	OmniPathConfig,
 	PlmnSupportItem,
-	Sbi,
+	Sbi as SbiConfig,
 	SerdeValidated,
 };
 
@@ -22,7 +22,8 @@ pub(crate) struct AppContextInner {
 	// 	amf_ue_ngap_id_generator: IDGenerator,
 	// 	amf_status_subscription_id_generator: IDGenerator,
 	config: ArcSwap<Configuration>,
-	sbi: ArcSwap<Sbi>,
+	sbi: ArcSwap<SbiConfig>,
+
 }
 
 #[derive(Debug, Default, Clone)]
@@ -30,6 +31,7 @@ pub(crate) struct Configuration {
 	pub(crate) name: String,
 	pub(crate) nf_id: NfInstanceId,
 	pub(crate) ngap_ips: Vec<IpAddr>,
+	pub(crate) ngap_port: u16,
 	pub(crate) served_guami_list: Vec<Guami>,
 	pub(crate) support_dnn_list: Vec<String>,
 	pub(crate) support_tai_list: Vec<Tai>,
@@ -59,6 +61,7 @@ impl AppContextInner {
 			support_dnn_list,
 			support_tai_list,
 			plmn_support_list,
+			ngap_port,
 			..
 		} = config.configuration.clone();
 		let nf_id = Uuid::new_v4();
@@ -67,6 +70,7 @@ impl AppContextInner {
 		let amf_config = Configuration {
 			name,
 			ngap_ips,
+			ngap_port,
 			served_guami_list,
 			support_dnn_list,
 			support_tai_list,
@@ -87,7 +91,7 @@ impl AppContextInner {
 
 	/// Retrieves short-lived access to the Sbi configuration. Avoid storing the
 	/// returned reference.
-	pub fn get_sbi_config(&self) -> Guard<Arc<Sbi>> {
+	pub fn get_sbi_config(&self) -> Guard<Arc<SbiConfig>> {
 		self.sbi.load()
 	}
 

@@ -1,0 +1,25 @@
+[package]
+name = "omnipath-ngap"
+description = "NGAP implementation"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish.workspace = true
+readme.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tokio-sctp.workspace = true
+socket2.workspace = true
+rustc-hash.workspace = true
+solana-nohash-hasher.workspace = true
+tracing.workspace = true
+ngap-models.workspace = true
+bytes.workspace = true
+
+counter = { path = "../../../utils/counter" }
+config = { path = "../config", package = "omnipath-config" }

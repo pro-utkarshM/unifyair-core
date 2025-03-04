@@ -35,7 +35,6 @@ tokio-util.workspace = true
 reqwest.workspace = true
 url.workspace = true
 uuid.workspace = true
-ngap-models.workspace = true
 arc-swap.workspace = true
 serde_valid.workspace = true
 tracing.workspace = true
@@ -46,8 +45,10 @@ tokio-sctp.workspace = true
 socket2.workspace = true
 rustc-hash.workspace = true
 solana-nohash-hasher.workspace = true
+ngap-models.workspace = true
 
 config = { path = "../config", package = "omnipath-config" }
+ngap = { path = "../ngap", package = "omnipath-ngap" }
 counter = { path = "../../../utils/counter" }
 client = { path = "../../../utils/client" }
 nf-base = { path = "../../../utils/nf-base" }

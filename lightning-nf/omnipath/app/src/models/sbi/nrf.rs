@@ -1,11 +1,9 @@
-use std::ops::Deref;
-
 use oasbi::{
 	common::NfType,
-	nrf::types::{AmfInfo, NfProfile, NfProfile1Unchecked, NfStatus},
+	nrf::types::{AmfInfo, NfProfile1Unchecked, NfStatus},
 };
 use openapi_nrf::models::NfProfile1;
-use tracing::{info, trace};
+use tracing::trace;
 
 use crate::{context::app_context::AppContext, models::sbi::ModelBuildError};
 
