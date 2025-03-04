@@ -14,9 +14,9 @@ pub const APP_PATCH_JSON: MediaType<'static> =
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum ContentType {
-	APP_JSON,
-	APP_FORM,
-	APP_PATCH_JSON,
+	AppJson,
+	AppForm,
+	AppPatchJson,
 }
 /// Custom error for parsing ContentType from a string
 #[derive(Error, Debug)]
@@ -33,14 +33,14 @@ macro_rules! generate_content_type_impl {
             /// Returns the string representation of the enum variant.
             pub const fn to_str(&self) -> &'static str {
                 match self {
-                    $(Self::$variant => $str_value),+
+                    $(ContentType::$variant => $str_value),+
                 }
             }
 
             /// Returns the MediaType constant associated with the enum variant.
             pub const fn to_mediatype(&self) -> MediaType<'static> {
                 match self {
-                    $(Self::$variant => $media_type),+
+                    $(ContentType::$variant => $media_type),+
                 }
             }
 
@@ -64,7 +64,7 @@ macro_rules! generate_content_type_impl {
                     .map_err(|e| ContentTypeParseError::MediaTypeError(e, s.to_owned()))?;
                 // Match the MediaType with corresponding ContentType variant
                 let content_type = match m {
-                    $(_ if m == $variant => ContentType::$variant,)*
+                    $(_ if m == $media_type => ContentType::$variant,)*
                     _ => return Err(ContentTypeParseError::InvalidContentType(s.to_owned())),
                 };
                 Ok(content_type)
@@ -75,7 +75,7 @@ macro_rules! generate_content_type_impl {
 }
 
 generate_content_type_impl!(
-	APP_JSON, APP_JSON, "application/json";
-	APP_FORM, APP_FORM, "application/x-www-form-urlencoded";
-	APP_PATCH_JSON, APP_PATCH_JSON, "application/json-patch+json";
+	AppJson, APP_JSON, "application/json";
+	AppForm, APP_FORM, "application/x-www-form-urlencoded";
+	AppPatchJson, APP_PATCH_JSON, "application/json-patch+json";
 );

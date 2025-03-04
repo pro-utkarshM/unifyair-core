@@ -2,10 +2,7 @@ use std::{backtrace::Backtrace, str::FromStr, sync::Arc};
 
 use arc_swap::ArcSwap;
 use formatx::formatx;
-use http::{
-	HeaderValue,
-	header::{self, AUTHORIZATION, InvalidHeaderName},
-};
+use http::header::{self, AUTHORIZATION};
 use oasbi::{
 	DeserResponse,
 	common::{
@@ -155,7 +152,7 @@ impl NrfClient {
 			Some(&header),
 			Some(&query),
 			Option::<&TraitSatisfier>::None,
-			ContentType::APP_FORM,
+			ContentType::AppJson,
 		)?;
 		let response = self
 			.client
@@ -206,7 +203,7 @@ impl NrfClient {
 			Some(header),
 			Option::<&TraitSatisfier>::None,
 			Some(body),
-			ContentType::APP_JSON,
+			ContentType::AppJson,
 		)?;
 		let response = self
 			.client
@@ -293,7 +290,7 @@ impl NrfClient {
 			Option::<&TraitSatisfier>::None,
 			Option::<&TraitSatisfier>::None,
 			Option::<&TraitSatisfier>::None,
-			ContentType::APP_JSON,
+			ContentType::AppJson,
 		)?;
 		self.set_auth_token::<{ NfType::Nrf }>(&mut request, ServiceName::NnrfNfm)
 			.await?;
@@ -352,7 +349,7 @@ impl NrfClient {
 			Option::<&TraitSatisfier>::None,
 			Option::<&TraitSatisfier>::None,
 			Some(&token_req),
-			ContentType::APP_FORM,
+			ContentType::AppForm,
 		)?;
 		let response = self
 			.client

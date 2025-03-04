@@ -10,7 +10,7 @@ use http::{
 	header::CONTENT_TYPE,
 	request::Builder as HttpReqBuilder,
 };
-use oasbi::{common::{AccessTokenReq, ProblemDetails}, ReqError};
+use oasbi::{common::{ProblemDetails}, ReqError};
 use reqwest::{Body, Client, Method, Request, Url};
 use serde::Serialize;
 use thiserror::Error;
@@ -111,8 +111,8 @@ pub fn serialize_body<B: Serialize>(
 	encoding_type: ContentType,
 ) -> Result<Body, GenericClientError> {
 	let encoded = match encoding_type {
-		ContentType::APP_JSON => serde_json::to_vec(body)?,
-		ContentType::APP_FORM => {
+		ContentType::AppJson => serde_json::to_vec(body)?,
+		ContentType::AppForm => {
 			let mut writer = vec![];
 			serde_qs::to_writer(body, &mut writer)?;
 			writer
