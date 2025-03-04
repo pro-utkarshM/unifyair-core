@@ -1,13 +1,22 @@
-use std::{collections::HashMap, sync::Arc, time::Instant};
+use std::{collections::HashMap as HashMapDefault, sync::Arc, time::Instant};
 
 use client::token_store::{StoreError, TokenStore};
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
-use dashmap::DashMap;
+use dashmap::DashMap as DashMapDefault;
+use rustc_hash::FxBuildHasher;
+use scc::{HashMap as SccHashMapDefault, hash_index::HashIndex as SccHashIndexDefault};
 use tokio::{
 	runtime::{Builder, Runtime},
 	sync::RwLock,
 	task,
 };
+
+const CAPACITY: usize = 1024;
+
+type DashMap<K, V> = DashMapDefault<K, V, FxBuildHasher>;
+type SccHashMap<K, V> = SccHashMapDefault<K, V, FxBuildHasher>;
+type SccHashIndex<K, V> = SccHashIndexDefault<K, V, FxBuildHasher>;
+type HashMap<K, V> = HashMapDefault<K, V, FxBuildHasher>;
 
 async fn tokenstore_write_operation(
 	store: Arc<TokenStore<String, usize>>,
@@ -68,12 +77,55 @@ async fn rwlock_read_operation(
 	assert_eq!(*entry, expected_value);
 }
 
-fn build_runtime() -> Runtime {
-	Builder::new_multi_thread()
-		.enable_all()
-		.build()
-		.unwrap()
+async fn raw_scc_hashmap_write_operation(
+	store: Arc<SccHashMap<String, usize>>,
+	key: String,
+	value: usize,
+) {
+	store.upsert_async(key, value).await;
 }
+
+async fn raw_scc_hashmap_read_operation(
+	store: Arc<SccHashMap<String, usize>>,
+	key: &String,
+	expected_value: usize,
+) {
+	let value = store
+		.read_async(key, |_, v| *v)
+		.await
+		.expect("Key not found");
+	assert_eq!(value, expected_value);
+}
+
+async fn raw_scc_hashindex_write_operation(
+	store: Arc<SccHashIndex<String, usize>>,
+	key: String,
+	value: usize,
+) {
+	match store.get_async(&key).await {
+		Some(val) => val.update(value),
+		None => {
+			store
+				.insert_async(key, value)
+				.await
+				.expect("Duplicates found");
+		}
+	}
+}
+
+async fn raw_scc_hashindex_read_operation(
+	store: Arc<SccHashIndex<String, usize>>,
+	key: &String,
+	expected_value: usize,
+) {
+	let value = store.peek_with(key, |_, v| *v).expect("Key not found");
+	assert_eq!(value, expected_value);
+}
+
+fn build_runtime() -> Runtime {
+	Builder::new_multi_thread().enable_all().build().unwrap()
+}
+
 // Macro for generic benchmark function
 macro_rules! read_write_benchmark {
 	($c:expr, $name:expr, $store:expr, $clone_fn:expr, $write_fn:expr, $read_fn:expr) => {
@@ -190,7 +242,7 @@ fn bench_read_write_with_runtime(c: &mut Criterion) {
 	);
 
 	// DashMap benchmark
-	let dashmap = Arc::new(DashMap::new());
+	let dashmap = Arc::new(DashMap::with_capacity_and_hasher(CAPACITY, FxBuildHasher));
 	read_write_benchmark!(
 		c,
 		"dashmap_multi_spawned_read_write_operation",
@@ -201,7 +253,10 @@ fn bench_read_write_with_runtime(c: &mut Criterion) {
 	);
 
 	// RwLock<HashMap> benchmark
-	let rwlock_map = Arc::new(RwLock::new(HashMap::new()));
+	let rwlock_map = Arc::new(RwLock::new(HashMap::with_capacity_and_hasher(
+		CAPACITY,
+		FxBuildHasher,
+	)));
 	read_write_benchmark!(
 		c,
 		"rwlock_multi_spawned_read_write_operation",
@@ -209,6 +264,32 @@ fn bench_read_write_with_runtime(c: &mut Criterion) {
 		Arc::clone,
 		rwlock_write_operation,
 		rwlock_read_operation
+	);
+
+	let raw_scc_hashmap = Arc::new(SccHashMap::with_capacity_and_hasher(
+		CAPACITY,
+		FxBuildHasher,
+	));
+	read_write_benchmark!(
+		c,
+		"raw_scc_hashmap_multi_spawned_read_write_operation",
+		raw_scc_hashmap,
+		Arc::clone,
+		raw_scc_hashmap_write_operation,
+		raw_scc_hashmap_read_operation
+	);
+
+	let raw_scc_hashindex = Arc::new(SccHashIndex::with_capacity_and_hasher(
+		CAPACITY,
+		FxBuildHasher,
+	));
+	read_write_benchmark!(
+		c,
+		"raw_scc_hashindex_multi_spawned_read_write_operation",
+		raw_scc_hashindex,
+		Arc::clone,
+		raw_scc_hashindex_write_operation,
+		raw_scc_hashindex_read_operation
 	);
 }
 
@@ -226,7 +307,7 @@ fn bench_read_with_runtime(c: &mut Criterion) {
 	);
 
 	// DashMap benchmark
-	let dashmap = Arc::new(DashMap::new());
+	let dashmap = Arc::new(DashMap::with_capacity_and_hasher(CAPACITY, FxBuildHasher));
 	read_benchmark!(
 		c,
 		"dashmap_read_operation_with_runtime",
@@ -237,7 +318,10 @@ fn bench_read_with_runtime(c: &mut Criterion) {
 	);
 
 	// RwLock<HashMap> benchmark
-	let rwlock_map = Arc::new(RwLock::new(HashMap::new()));
+	let rwlock_map = Arc::new(RwLock::new(HashMap::with_capacity_and_hasher(
+		CAPACITY,
+		FxBuildHasher,
+	)));
 	read_benchmark!(
 		c,
 		"rwlock_read_operation_with_runtime",
@@ -245,6 +329,32 @@ fn bench_read_with_runtime(c: &mut Criterion) {
 		Arc::clone,
 		rwlock_write_operation,
 		rwlock_read_operation
+	);
+
+	let raw_scc_hashmap = Arc::new(SccHashMap::with_capacity_and_hasher(
+		CAPACITY,
+		FxBuildHasher,
+	));
+	read_benchmark!(
+		c,
+		"raw_scc_hashmap_read_operation_with_runtime",
+		raw_scc_hashmap,
+		Arc::clone,
+		raw_scc_hashmap_write_operation,
+		raw_scc_hashmap_read_operation
+	);
+
+	let raw_scc_hashindex = Arc::new(SccHashIndex::with_capacity_and_hasher(
+		CAPACITY,
+		FxBuildHasher,
+	));
+	read_benchmark!(
+		c,
+		"raw_scc_hashindex_read_operation_with_runtime",
+		raw_scc_hashindex,
+		Arc::clone,
+		raw_scc_hashindex_write_operation,
+		raw_scc_hashindex_read_operation
 	);
 }
 
@@ -261,7 +371,8 @@ fn bench_write_with_runtime(c: &mut Criterion) {
 	);
 
 	// DashMap benchmark
-	let dashmap: Arc<DashMap<String, usize>> = Arc::new(DashMap::new());
+	let dashmap: Arc<DashMap<String, usize>> =
+		Arc::new(DashMap::with_capacity_and_hasher(CAPACITY, FxBuildHasher));
 	write_benchmark!(
 		c,
 		"dashmap_write_operation_with_runtime",
@@ -271,13 +382,39 @@ fn bench_write_with_runtime(c: &mut Criterion) {
 	);
 
 	// RwLock<HashMap> benchmark
-	let rwlock_map: Arc<RwLock<HashMap<String, usize>>> = Arc::new(RwLock::new(HashMap::new()));
+	let rwlock_map: Arc<RwLock<HashMap<String, usize>>> = Arc::new(RwLock::new(
+		HashMap::with_capacity_and_hasher(CAPACITY, FxBuildHasher),
+	));
 	write_benchmark!(
 		c,
 		"rwlock_write_operation_with_runtime",
 		rwlock_map,
 		Arc::clone,
 		rwlock_write_operation
+	);
+
+	let raw_scc_hashmap = Arc::new(SccHashMap::with_capacity_and_hasher(
+		CAPACITY,
+		FxBuildHasher,
+	));
+	write_benchmark!(
+		c,
+		"raw_scc_hashmap_write_operation_with_runtime",
+		raw_scc_hashmap,
+		Arc::clone,
+		raw_scc_hashmap_write_operation
+	);
+
+	let raw_scc_hashindex = Arc::new(SccHashIndex::with_capacity_and_hasher(
+		CAPACITY,
+		FxBuildHasher,
+	));
+	write_benchmark!(
+		c,
+		"raw_scc_hashindex_write_operation_with_runtime",
+		raw_scc_hashindex,
+		Arc::clone,
+		raw_scc_hashindex_write_operation
 	);
 }
 
@@ -287,8 +424,5 @@ fn criterion_benchmark(c: &mut Criterion) {
 	bench_write_with_runtime(c);
 }
 
-criterion_group!(
-	benches,
-	criterion_benchmark,
-);
+criterion_group!(benches, criterion_benchmark,);
 criterion_main!(benches);
