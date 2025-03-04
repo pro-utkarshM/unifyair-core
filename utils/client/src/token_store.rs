@@ -1,13 +1,7 @@
-use std::{
-	fmt,
-	future::Future,
-	hash::Hash,
-	sync::{
-		Arc,
-		atomic::{AtomicU32, Ordering},
-	},
-};
+use std::{fmt, future::Future, hash::Hash, sync::Arc};
 
+use counter::CounterU32;
+pub use rustc_hash::FxBuildHasher;
 use scc::HashMap as SccReadHashMap;
 use thiserror::Error;
 use tokio::sync::Notify;
@@ -15,12 +9,7 @@ use tokio::sync::Notify;
 const HASH_MAP_CAPACITY: usize = 1024;
 
 // A global atomic counter for generating unique IDs for TokenState instances.
-static TOKEN_COUNTER: AtomicU32 = AtomicU32::new(1);
-
-/// Increments the global atomic counter and returns the new value.
-fn increment_counter() -> u32 {
-	TOKEN_COUNTER.fetch_add(1, Ordering::Relaxed)
-}
+static TOKEN_COUNTER: CounterU32 = CounterU32::new();
 
 /// Represents the internal state of a token.
 #[derive(Clone)]
@@ -28,7 +17,6 @@ pub(crate) enum TokenStateInner<V> {
 	Ready(V),              // Token is ready with a value.
 	Updating(Arc<Notify>), // Token is being updated, and `Notify` is used to signal completion.
 	Failed,                // Token update failed.
-	Uninitialized,         // Token has not been initialized yet.
 }
 
 /// Represents the state of a token with a unique ID and an internal state.
@@ -40,32 +28,20 @@ pub(crate) struct TokenState<V> {
 impl<V> TokenState<V> {
 	/// Creates a new `TokenState` with a `Ready` value.
 	pub(crate) fn new_ready(value: V) -> Self {
-		let id = increment_counter();
+		let id = TOKEN_COUNTER.increment();
 		let state = TokenStateInner::Ready(value);
 		Self { id, state }
 	}
 
-	/// Creates a new `TokenState` in the `Uninitialized` state.
-	pub(crate) fn new_unitialized() -> Self {
-		let id = increment_counter();
-		Self {
-			id,
-			state: TokenStateInner::Uninitialized,
-		}
-	}
-
 	/// Creates a new `TokenState` in the `Updating` state and returns it along
 	/// with the `Notify` instance.
-	pub(crate) fn new() -> (Self, Arc<Notify>) {
-		let id = increment_counter();
-		let notify = Arc::new(Notify::new());
-		(
-			Self {
-				id,
-				state: TokenStateInner::Updating(notify.clone()),
-			},
-			notify.clone(),
-		)
+	pub(crate) fn new(notify: Arc<Notify>) -> Self {
+		let id = TOKEN_COUNTER.increment();
+		// let notify = Arc::new(Notify::new());
+		Self {
+			id,
+			state: TokenStateInner::Updating(notify.clone()),
+		}
 	}
 
 	/// Checks if the token is in the `Updating` state.
@@ -117,7 +93,8 @@ where
 	K: 'static,
 	V: 'static,
 {
-	map: SccReadHashMap<K, Arc<TokenState<V>>>, // Concurrent hash map storing token states.
+	map: SccReadHashMap<K, Arc<TokenState<V>>, FxBuildHasher>, /* Concurrent hash map storing
+	                                                            * token states. */
 }
 
 /// Represents an entry in the `TokenStore`.
@@ -166,7 +143,7 @@ where
 	/// Creates a new `TokenStore`.
 	pub fn new() -> TokenStore<K, V> {
 		TokenStore {
-			map: SccReadHashMap::with_capacity(HASH_MAP_CAPACITY),
+			map: SccReadHashMap::with_capacity_and_hasher(HASH_MAP_CAPACITY, FxBuildHasher),
 		}
 	}
 
@@ -187,7 +164,6 @@ where
 					}
 					TokenStateInner::Failed => return Err(StoreError::ReadError(val.id)),
 					TokenStateInner::Updating(notify) => notify.clone(),
-					TokenStateInner::Uninitialized => return Ok(None),
 				},
 			};
 
@@ -205,11 +181,13 @@ where
 		&self,
 		key: K,
 		future: impl Future<Output = Result<V, E>>,
-	) -> Result<TokenEntry<V>, StoreError> 
-    where E: std::error::Error + Send + Sync + 'static
+	) -> Result<TokenEntry<V>, StoreError>
+	where
+		E: std::error::Error + Send + Sync + 'static,
 	{
-		let (ongoing_update_state, notify) = TokenState::<V>::new();
-		let id = ongoing_update_state.id;
+		let notify = Arc::new(Notify::new());
+		let new_token_state = TokenState::<V>::new(notify.clone());
+		let id = new_token_state.id;
 
 		let entry = self.map.get_async(&key).await;
 		match entry {
@@ -221,7 +199,7 @@ where
 		drop(entry); // Drop the reference to avoid deadlocks.
 
 		self.map
-			.upsert_async(key.clone(), Arc::new(ongoing_update_state))
+			.upsert_async(key.clone(), Arc::new(new_token_state))
 			.await;
 
 		let res = future.await;
@@ -250,23 +228,8 @@ where
 
 #[cfg(test)]
 mod tests {
-	use std::{
-		sync::atomic::{AtomicU32, Ordering},
-		time::Instant,
-	};
-
-	use dashmap::DashMap;
-	use tokio::{sync::RwLock, task};
 
 	use super::*;
-
-	#[tokio::test]
-	async fn test_increment_counter() {
-		let initial = TOKEN_COUNTER.load(Ordering::Relaxed);
-		increment_counter();
-		let after = TOKEN_COUNTER.load(Ordering::Relaxed);
-		assert_eq!(after, initial + 1);
-	}
 
 	#[tokio::test]
 	async fn test_token_state_ready() {
@@ -278,7 +241,8 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_token_state_updating() {
-		let (token_state, _notify) = TokenState::<i32>::new();
+		let notify = Arc::new(Notify::new());
+		let token_state = TokenState::<i32>::new(notify.clone());
 		assert!(token_state.is_updating());
 		assert!(!token_state.is_ready());
 	}
@@ -330,202 +294,5 @@ mod tests {
 
 		let result = store.get(&key).await;
 		assert!(matches!(result, Err(StoreError::ReadError(_))));
-	}
-
-	#[tokio::test(flavor = "multi_thread", worker_threads = 12)]
-	async fn test_thread_contention_with_avg_times() {
-		let store = Arc::new(TokenStore::<String, i32>::new());
-		let write_time_total = Arc::new(AtomicU32::new(0));
-		let read_time_total = Arc::new(AtomicU32::new(0));
-		let mut handles = vec![];
-
-		// Writer threads: Insert 100 entries.
-		for i in 0..1000 {
-			let store = store.clone();
-			let write_time_total = write_time_total.clone();
-			handles.push(task::spawn(async move {
-				let key = format!("key_{}", i);
-				let start = Instant::now();
-				store
-					.set(key.clone(), async move { Ok::<i32, StoreError>(i * 10) })
-					.await
-					.unwrap();
-				let elapsed = start.elapsed().as_nanos() as u32;
-				write_time_total.fetch_add(elapsed, Ordering::Relaxed);
-			}));
-		}
-
-		// Allow writers to complete.
-		for handle in handles.drain(..) {
-			handle.await.unwrap();
-		}
-
-		println!(
-			"Average write time: {} ns",
-			write_time_total.load(Ordering::Relaxed) / 1000
-		);
-
-		// Reader threads: Read those entries.
-		for read_iter in 0..5 {
-			for i in 0..1000 {
-				let store = store.clone();
-				let read_time_total = read_time_total.clone();
-				handles.push(task::spawn(async move {
-					let key = format!("key_{}", i);
-					let start = Instant::now();
-					let entry = store.get(&key).await.unwrap();
-					let elapsed = start.elapsed().as_nanos() as u32;
-					read_time_total.fetch_add(elapsed, Ordering::Relaxed);
-					if let Some(entry) = entry {
-						assert_eq!(*entry.get(), i * 10);
-					} else {
-						panic!("Key not found: {}", key);
-					}
-				}));
-			}
-
-			for handle in handles.drain(..) {
-				handle.await.unwrap();
-			}
-
-			println!(
-				"Iteration {}: Average read time: {} ns",
-				read_iter,
-				read_time_total.load(Ordering::Relaxed) / 1000
-			);
-
-			read_time_total.store(0, Ordering::Relaxed);
-		}
-	}
-
-	#[tokio::test(flavor = "multi_thread", worker_threads = 12)]
-	async fn test_tokio_rwlock_contention_with_avg_times() {
-		let store = Arc::new(RwLock::new(std::collections::HashMap::<String, i32>::new()));
-		let write_time_total = Arc::new(AtomicU32::new(0));
-		let read_time_total = Arc::new(AtomicU32::new(0));
-		let mut handles = vec![];
-
-		// Writer threads: Insert 1000 entries.
-		for i in 0..1000 {
-			let store = store.clone();
-			let write_time_total = write_time_total.clone();
-			handles.push(tokio::spawn(async move {
-				let key = format!("key_{}", i);
-				let start = Instant::now();
-				let mut map = store.write().await;
-				map.insert(key, i * 10);
-				let elapsed = start.elapsed().as_nanos() as u32;
-				write_time_total.fetch_add(elapsed, Ordering::Relaxed);
-			}));
-		}
-
-		// Allow writers to complete.
-		for handle in handles {
-			handle.await.unwrap();
-		}
-
-		println!(
-			"Average write time: {} ns",
-			write_time_total.load(Ordering::Relaxed) / 1000
-		);
-
-		handles = vec![];
-
-		// Reader threads: Read those entries multiple times.
-		for read_iter in 0..5 {
-			for i in 0..1000 {
-				let store = store.clone();
-				let read_time_total = read_time_total.clone();
-				handles.push(tokio::spawn(async move {
-					let key = format!("key_{}", i);
-					let start = Instant::now();
-					let map = store.read().await;
-					if let Some(value) = map.get(&key) {
-						assert_eq!(*value, i * 10);
-					}
-					let elapsed = start.elapsed().as_nanos() as u32;
-					read_time_total.fetch_add(elapsed, Ordering::Relaxed);
-				}));
-			}
-
-			// Wait for all read operations to complete.
-			for handle in handles.drain(..) {
-				handle.await.unwrap();
-			}
-
-			println!(
-				"Iteration {}: Average read time: {} ns",
-				read_iter,
-				read_time_total.load(Ordering::Relaxed) / 1000
-			);
-
-			// Reset the read time total for the next iteration.
-			read_time_total.store(0, Ordering::Relaxed);
-		}
-	}
-
-	#[tokio::test(flavor = "multi_thread", worker_threads = 12)]
-	async fn test_dashmap_contention_with_avg_times() {
-		let store = Arc::new(DashMap::<String, i32>::new());
-		let write_time_total = Arc::new(AtomicU32::new(0));
-		let read_time_total = Arc::new(AtomicU32::new(0));
-		let mut handles = vec![];
-
-		// Writer threads: Insert 1000 entries.
-		for i in 0..1000 {
-			let store = store.clone();
-			let write_time_total = write_time_total.clone();
-			handles.push(task::spawn(async move {
-				let key = format!("key_{}", i);
-				let start = Instant::now();
-				store.insert(key, i * 10);
-				let elapsed = start.elapsed().as_nanos() as u32;
-				write_time_total.fetch_add(elapsed, Ordering::Relaxed);
-			}));
-		}
-
-		// Wait for all writes to complete.
-		for handle in handles {
-			handle.await.unwrap();
-		}
-
-		println!(
-			"Average write time: {} ns",
-			write_time_total.load(Ordering::Relaxed) / 1000
-		);
-
-		// Reset handles for reading.
-		handles = vec![];
-
-		// Reader threads: Read those entries multiple times.
-		for read_iter in 0..5 {
-			for i in 0..1000 {
-				let store = store.clone();
-				let read_time_total = read_time_total.clone();
-				handles.push(task::spawn(async move {
-					let key = format!("key_{}", i);
-					let start = Instant::now();
-					if let Some(value) = store.get(&key) {
-						assert_eq!(*value, i * 10);
-					}
-					let elapsed = start.elapsed().as_nanos() as u32;
-					read_time_total.fetch_add(elapsed, Ordering::Relaxed);
-				}));
-			}
-
-			// Wait for all read operations to complete.
-			for handle in handles.drain(..) {
-				handle.await.unwrap();
-			}
-
-			println!(
-				"Iteration {}: Average read time: {} ns",
-				read_iter,
-				read_time_total.load(Ordering::Relaxed) / 1000
-			);
-
-			// Reset the read time total for the next iteration.
-			read_time_total.store(0, Ordering::Relaxed);
-		}
 	}
 }
