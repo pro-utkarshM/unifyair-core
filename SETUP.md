@@ -1,13 +1,14 @@
-# Setup and Run Instructions for unifyair-core (Local Development Environment)
+# Setup and Run Instructions for unifyair-core (Remote Development Setup)
 
 This document provides instructions on how to set up and run the `unifyair-core` project in a **local development environment**, including running the development script `run.sh` and understanding the Cargo configuration.
 
 ## Prerequisites
 Before you begin, ensure you have the following installed and configured:
-  - **Rust:** The project is built using Rust, so you'll need the Rust toolchain (Cargo, rustc, etc.).
-  - **rsync:** The `run.sh` script uses `rsync` for file synchronization.
-  - **SSH Access:** You need SSH access to the remote server specified in the `run.sh` script.
-  - **Git:** You need git installed to fetch dependencies.
+
+-   **Rust:** The project is built using Rust, so you'll need the Rust toolchain (Cargo, rustc, etc.).
+-   **rsync:** The `run.sh` script uses `rsync` for file synchronization.
+-   **SSH Access:** You need SSH access to the remote server specified in the `run.sh` script.
+-   **Git:** You need git installed to fetch dependencies.
 
 ## Local and Remote Directory Structure
 -   **Local:**
@@ -47,7 +48,6 @@ The `run.sh` script automates the following tasks:
 ```
 
 ## Cargo Configuration (`.cargo/config.toml`)
-
 The `.cargo/config.toml` file contains build configurations and dependency overrides for the project. Here's a breakdown:
 
 ```toml
