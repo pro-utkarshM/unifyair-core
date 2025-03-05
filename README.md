@@ -9,7 +9,6 @@ This README would normally document whatever steps are necessary to get your app
   * UPF - **DataWarp**
   * SMF - **InfiniSync**
 * Version
-* [Learn Markdown](https://bitbucket.org/tutorials/markdowndemo)
 
 ### How do I get set up?
 
@@ -26,7 +25,6 @@ This README would normally document whatever steps are necessary to get your app
 * Code review
 * Other guidelines
 
-### Who do I talk to?
+### Local Development Setup
 
-* Repo owner or admin
-* Other community or team contact
+* For setting up the local development environment, please refer to [SETUP.md](SETUP.md).
