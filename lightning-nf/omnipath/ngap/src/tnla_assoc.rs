@@ -69,7 +69,7 @@ impl TnlaAssociation {
 		})
 	}
 
-	pub async fn read_data(&self) -> Result<BytesMut, NetworkError> {
+	pub async fn read_data(&self) -> Result<Bytes, NetworkError> {
 		let mut buf = BytesMut::with_capacity(READ_BUFFER_SIZE);
 		self.stream
 			.recvmsg_eor_buf(&mut buf)

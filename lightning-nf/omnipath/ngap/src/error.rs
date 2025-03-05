@@ -8,8 +8,8 @@ pub enum NetworkError {
 	SocketCreationError(#[source] IoError),
 	#[error("ListenerBindingError: Failed to bind SCTP listener")]
 	ListenerBindingError(#[source] IoError),
-	#[error("InitMsgConfigurationError: Failed to set SCTP initialization parameters")]
-	InitMsgConfigurationError(#[source] IoError),
+	#[error("SctpSocketConfigurationError: Failed to set SCTP socket parameters")]
+	SctpSocketConfigurationError(#[source] IoError),
 	#[error("LocalAddressError: Failed to get local address for SCTP association")]
 	LocalAddressError(#[source] IoError),
 	#[error("RemoteAddressError: Failed to get remote address for SCTP association")]
