@@ -10,7 +10,7 @@ resolver = "2"
 [workspace.package]
 name = "unifyair-core"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 authors = ["UnifyAir Maintainers <maintainers@unifyair.com>"]
 repository = "https://bitbucket.org/blocknet/unifyair-core"
 homepage = "https://unifyair.com/"
@@ -72,6 +72,7 @@ scc = "2.2.6"
 rustc-hash = "2.1"
 solana-nohash-hasher = "0.2.1"
 tokio-sctp = "0.1.0"
+
 # Depenedency of tokio-sctp
 socket2 = "0.4"
 
@@ -92,3 +93,4 @@ openapi-nrf = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", branc
     "server",
 ] }
 ngap-models = { git = "ssh://git@github.com/UnifyAir/asn-models.git/", branch = "master", package = "ngap" }
+asn1-per = { git = "ssh://git@github.com/UnifyAir/asn-models.git/", branch = "master", package = "asn1-per" }

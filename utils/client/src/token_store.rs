@@ -159,7 +159,7 @@ where
 			let notify = match value {
 				None => return Ok(None),
 				Some(ref val) => match &val.as_ref().state {
-					TokenStateInner::Ready(ref _v) => {
+					TokenStateInner::Ready(_v) => {
 						return Ok(Some(TokenEntry::new_unchecked(val.clone())));
 					}
 					TokenStateInner::Failed => return Err(StoreError::ReadError(val.id)),
