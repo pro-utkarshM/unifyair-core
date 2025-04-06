@@ -35,6 +35,7 @@ pub(crate) struct ContextQueue<T> {
 	processor_active: AtomicBool,
 }
 
+
 impl<T> ContextQueue<T> {
 	pub fn new(context: T) -> Self {
 		ContextQueue {
@@ -170,7 +171,6 @@ where
 	/// # Returns
 	///
 	/// The result of type `O` produced by the closure.
-	///
 	pub async fn schedule_and_wait<F, O>(
 		self: Arc<Self>,
 		closure: F,

@@ -5,25 +5,19 @@ use std::{
 	sync::Arc,
 };
 
+use bytes::Bytes;
 use rustc_hash::FxBuildHasher;
 use socket2::Domain;
 use solana_nohash_hasher::NoHashHasher;
 use tokio::sync::RwLock;
 use tokio_sctp::{SctpListener, SctpSocket, SctpStream};
 use tokio_util::sync::CancellationToken;
-use tracing::log::{error, info, trace};
+use tracing::info;
 
-use crate::{NetworkError, TnlaAssociation};
-
-const MAX_TNLA_ASSOCIATIONS: usize = 32;
-const DEFAULT_NGAP_PORT: u16 = 38412;
+use super::{NetworkError, TnlaAssociation};
+use crate::config;
 
 type UnitHasher<T> = BuildHasherDefault<NoHashHasher<T>>;
-
-pub struct Network {
-	listener: SctpListener,
-	associations: RwLock<Associations>,
-}
 
 pub struct Associations {
 	associations: HashMap<usize, Arc<TnlaAssociation>, UnitHasher<usize>>,
@@ -57,7 +51,8 @@ impl Associations {
 		&mut self,
 		stream: SctpStream,
 	) -> Result<Arc<TnlaAssociation>, NetworkError> {
-		let association = Arc::new(TnlaAssociation::new(stream)?);
+		let association =
+			Arc::new(TnlaAssociation::new(stream).map_err(NetworkError::TnlaCreationError)?);
 
 		// Check if the association already exists using the associations_set.
 		if !self
@@ -104,6 +99,18 @@ impl Associations {
 			None
 		}
 	}
+
+	pub fn get_tnla_association(
+		&self,
+		id: usize,
+	) -> Option<Arc<TnlaAssociation>> {
+		self.associations.get(&id).cloned()
+	}
+}
+
+pub struct Network {
+	listener: SctpListener,
+	associations: RwLock<Associations>,
 }
 
 impl Network {
@@ -112,6 +119,7 @@ impl Network {
 		port: u16,
 		sctp_config: &config::SCTP,
 	) -> Result<Self, NetworkError> {
+		info!("Connecting to SCTP port {} on IP address {}", port, ip_addr);
 		let domain = match ip_addr {
 			IpAddr::V4(_) => Domain::IPV4,
 			IpAddr::V6(_) => Domain::IPV6,
@@ -126,7 +134,9 @@ impl Network {
 			.set_sctp_initmsg(&init_msg)
 			.map_err(NetworkError::SctpSocketConfigurationError)?;
 
-		socket.set_nodelay(true).map_err(NetworkError::SctpSocketConfigurationError)?;
+		socket
+			.set_nodelay(true)
+			.map_err(NetworkError::SctpSocketConfigurationError)?;
 
 		let addr = SocketAddr::new(ip_addr, port);
 		let listener =
@@ -147,60 +157,50 @@ impl Network {
 	///   operation.
 	///
 	/// # Returns
-	async fn accept_and_create_tnla(
+	pub async fn accept_and_create_tnla(
 		&self,
-		cancel: CancellationToken,
-	) -> Result<(), NetworkError> {
+		_cancel: CancellationToken,
+	) -> Result<Arc<TnlaAssociation>, NetworkError> {
 		let (stream, addr) = self
 			.listener
 			.accept()
 			.await
 			.map_err(NetworkError::ConnectionAcceptError)?;
+
 		info!("Accepted connection from: {:?}", addr);
 
 		let mut associations = self.associations.write().await; // Acquire write lock
 		let tnla = associations.add_tnla_association(stream)?; // Insert using the new insert method
 
-		let tnla_cancel = cancel.child_token();
-		tokio::spawn(async move {
-			// if let Err(e) = tnla.run(tnla_cancel).await {
-			// 	let net_err = NetworkError::TnlaError(format!("{:?}", e));
-			// 	println!("TNLA association error: {:?}", net_err);
-			// }
-		});
-
-		Ok(())
+		Ok(tnla)
 	}
 
-	/// Starts the main loop of the network, accepting connections,
-	/// creating TNLA associations, and spawning futures.  Runs until
-	/// cancelled or an error occurs.
-	pub async fn run(
+	/// Sends data to a specific TNLA association.
+	///
+	/// # Arguments
+	///
+	/// * `association_id`: The ID of the TNLA association to send data to.
+	/// * `data`: The data to send.
+	///
+	/// # Returns
+	///
+	/// Returns `Ok(())` if the data was sent successfully, or a `NetworkError`
+	/// otherwise.
+	pub async fn send_data(
 		&self,
-		cancel: CancellationToken,
+		association_id: usize,
+		data: Bytes,
 	) -> Result<(), NetworkError> {
-		loop {
-			tokio::select! {
-			biased;
-
-			res = self.accept_and_create_tnla(cancel.clone()) => {
-				if let Err(e) = res {
-					error!("Error accepting connection: {:?}", e);
-				}
-			}
-
-			_ = cancel.cancelled() => {
-				info!("Cancellation requested, exiting loop");
-				break;
-			}}
+		let associations = self.associations.read().await; // Acquire read lock
+		let tnla = associations.get_tnla_association(association_id);
+		drop(associations);
+		if let Some(tnla) = tnla {
+			// Send data using the TNLA association
+			tnla.write_data(data, None)
+				.await
+				.map_err(|err| NetworkError::TnlaSendError(association_id, err))
+		} else {
+			Err(NetworkError::TnlaNotFound(association_id))
 		}
-
-		self.graceful_shutdown().await?;
-		Ok(())
-	}
-
-	// TODO: Implement graceful shutdown for the network
-	pub async fn graceful_shutdown(&self) -> Result<(), NetworkError> {
-		Ok(())
 	}
 }

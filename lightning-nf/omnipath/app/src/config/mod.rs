@@ -1,5 +1,5 @@
 use std::net::{IpAddr, Ipv4Addr};
-
+use nonempty::NonEmpty;
 use nf_base::{LoggingConfig, NfConfig, RuntimeConfig};
 use oasbi::{
 	common::{Guami, PlmnId, Snssai, Tai, Uri, UriScheme},
@@ -10,7 +10,7 @@ use serde_valid::Validate;
 use serde_with::{DisplayFromStr, serde_as};
 use tokio_sctp::InitMsg;
 
-#[derive(Serialize, Deserialize, Debug, Validate)]
+#[derive(Serialize, Deserialize, Debug, Validate, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct OmniPathConfig {
 	pub info: Info,
@@ -23,7 +23,7 @@ pub struct OmniPathConfig {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Info {
 	#[serde_as(as = "DisplayFromStr")]
@@ -31,18 +31,18 @@ pub struct Info {
 	pub description: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Validate)]
+#[derive(Serialize, Deserialize, Debug, Clone, Validate, smart_default::SmartDefault)]
 #[serde(rename_all = "camelCase")]
 pub struct Configuration {
 	pub amf_name: String,
 	pub ngap_ip_list: Vec<IpAddr>,
 	pub ngap_port: u16,
-	#[validate(min_items = 1)]
-	pub served_guami_list: Vec<Guami>,
+	#[default(_code = "NonEmpty::new(Guami::default())")]
+	pub served_guami_list: NonEmpty<Guami>,
 	#[validate(min_items = 1)]
 	pub support_tai_list: Vec<Tai>,
-	#[validate(min_items = 1)]
-	pub plmn_support_list: Vec<PlmnSupportItem>,
+	#[default(_code = "NonEmpty::new(PlmnSupportItem::default())")]
+	pub plmn_support_list: NonEmpty<PlmnSupportItem>,
 	#[validate(min_items = 1)]
 	pub support_dnn_list: Vec<String>,
 	pub nrf_uri: Uri,
@@ -96,11 +96,12 @@ pub fn enum_list<const N: usize>(
 	}
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, smart_default::SmartDefault)]
 #[serde(rename_all = "camelCase")]
 pub struct PlmnSupportItem {
 	pub plmn_id: PlmnId,
-	pub snssai_list: Vec<Snssai>,
+	#[default(_code = "NonEmpty::new(Snssai::default())")]
+	pub snssai_list: NonEmpty<Snssai>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -164,7 +165,7 @@ pub struct Timer {
 	max_retry_times: u8,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SCTP {
 	num_ostreams: u16,
