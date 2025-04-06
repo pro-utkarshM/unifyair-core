@@ -10,11 +10,11 @@ use http::{
 	header::CONTENT_TYPE,
 	request::Builder as HttpReqBuilder,
 };
-use oasbi::{common::{ProblemDetails}, ReqError};
+use oasbi::{ReqError, common::ProblemDetails};
 use reqwest::{Body, Client, Method, Request, Url};
 use serde::Serialize;
 use thiserror::Error;
-use tracing::log::trace;
+use tracing::trace;
 
 mod content_type;
 mod header_map_serializer;
@@ -150,7 +150,9 @@ where
 		.map(|h| to_headers(&h))
 		.transpose()?
 		.map(|h| request.headers_mut().extend(h));
-	request.headers_mut().insert(CONTENT_TYPE, encoding_type.to_header_value());
+	request
+		.headers_mut()
+		.insert(CONTENT_TYPE, encoding_type.to_header_value());
 	*request.body_mut() = body
 		.map(|t| serialize_body(&t, encoding_type))
 		.transpose()?;
@@ -190,8 +192,8 @@ where
 		.map(|h| to_headers(h))
 		.transpose()?
 		.map(|h| req.headers_mut().extend(h));
-    req.headers_mut().insert(CONTENT_TYPE, encoding_type.to_header_value());
+	req.headers_mut()
+		.insert(CONTENT_TYPE, encoding_type.to_header_value());
 
 	Ok(req)
 }
-

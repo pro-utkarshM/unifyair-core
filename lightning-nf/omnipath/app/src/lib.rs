@@ -1,8 +1,10 @@
 #![feature(error_generic_member_access)]
 
-pub use config;
+pub(crate) mod config;
 pub(crate) mod context;
 pub mod models;
+pub mod ngap;
+pub use context::app_context::get_global_app_context;
 
 use std::{rc::Rc, sync::Arc};
 
@@ -21,7 +23,7 @@ use crate::{
 	context::app_context::{AppContext, Configuration},
 	models::sbi::ModelBuildError,
 };
-use ngap::{Network, NetworkError};
+use ngap::{context::NgapContext, network::{Network, NetworkError}};
 
 const SOURCE_TYPE: NfType = NfType::Amf;
 
@@ -43,6 +45,9 @@ pub enum OmniPathError {
 
 	#[error("NgapNetworkError: Ngap Network Error")]
 	NgapNetworkError(#[from] NetworkError),
+
+	#[error("GlobalAppContextSetError: Unable to set App Context Error")]
+	GlobalAppContextSetError(#[from] tokio::sync::SetError<AppContext>),
 }
 
 #[derive(Error, Debug)]
@@ -75,7 +80,7 @@ pub struct OmniPathApp {
 	config: Rc<SerdeValidated<OmniPathConfig>>,
 	shutdown: CancellationToken,
 	app_context: AppContext,
-	ngap_network: Arc<Network>,
+	ngap_context: Arc<NgapContext>,
 }
 
 pub fn create_nrf_client(url: Url) -> Result<NrfClient, OmniPathConfigError> {
@@ -131,17 +136,23 @@ impl NfInstance for OmniPathApp {
 			app_context.get_config().ngap_port,
 			&valid_config.inner().configuration.sctp,
 		)?;
+		
+		let ngap_context = NgapContext::new(ngap_network);
+		crate::context::app_context::APP_CONTEXT.set(app_context.clone())?;
 
 		Ok(Self {
 			nrf_client,
 			shutdown,
 			app_context,
 			config: Rc::new(valid_config),
-			ngap_network: Arc::new(ngap_network),
+			ngap_context: Arc::new(ngap_context),
 		})
 	}
 
 	async fn start(&self) -> Result<(), Self::Error> {
+		let ngap_context = self.ngap_context.clone();
+		let shutdown = self.shutdown.clone();
+		ngap_context.run(shutdown).await?;
 		Ok(())
 	}
 

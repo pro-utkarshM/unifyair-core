@@ -9,7 +9,8 @@ use http::{
 	Version,
 	header::{AUTHORIZATION, CONTENT_TYPE, HeaderName},
 	request::Builder as HttpReqBuilder,
-}; use http_body_util::BodyExt;
+};
+use http_body_util::BodyExt;
 use oasbi::{DeserResponse, common::NfType, nrf::types::NfProfile};
 use openapi_nrf::models::{
 	SearchNfInstancesHeaderParams,
@@ -115,10 +116,9 @@ where
 		})
 	}
 
-
 	pub async fn request<H, Q, B, Resp>(
 		&self,
-	    req: HttpRequest<Body>
+		req: HttpRequest<Body>,
 	) -> Result<(StatusCode, Resp), GenericClientError>
 	where
 		Q: Serialize,

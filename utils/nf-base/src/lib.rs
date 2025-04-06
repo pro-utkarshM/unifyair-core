@@ -20,7 +20,7 @@ pub trait NfConfig {
 	fn get_runtime_config(&self) -> &RuntimeConfig;
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct LoggingConfig {
 	pub enable: bool,
@@ -28,17 +28,18 @@ pub struct LoggingConfig {
 	pub report_caller: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeConfig {
 	#[serde(rename = "type")]
 	pub rt_type: RuntimeType,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub enum RuntimeType {
 	#[serde(rename = "single")]
 	Single,
+	#[default]
 	#[serde(rename = "multi")]
 	Multi,
 }

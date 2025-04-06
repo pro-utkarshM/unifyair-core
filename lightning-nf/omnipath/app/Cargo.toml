@@ -45,10 +45,16 @@ tokio-sctp.workspace = true
 socket2.workspace = true
 rustc-hash.workspace = true
 solana-nohash-hasher.workspace = true
+versions.workspace = true
+asn1-per.workspace = true
 ngap-models.workspace = true
+scc.workspace = true
+derive-new.workspace = true
+nonempty.workspace = true
+faster-hex.workspace = true
+valuable.workspace = true
 
-config = { path = "../config", package = "omnipath-config" }
-ngap = { path = "../ngap", package = "omnipath-ngap" }
 counter = { path = "../../../utils/counter" }
 client = { path = "../../../utils/client" }
 nf-base = { path = "../../../utils/nf-base" }
+

@@ -1,8 +1,7 @@
 [workspace]
 members = [
     "lightning-cli",
-    "lightning-nf/omnipath/app", "lightning-nf/omnipath/config",
-    "lightning-nf/omnipath/ngap",
+    "lightning-nf/omnipath/app",
     "utils/*",
 ]
 resolver = "2"
@@ -43,7 +42,7 @@ async-trait = "0.1"
 axum-extra = { version = "0.9", features = ["cookie", "multipart"] }
 axum = { version = "0.7" }
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
-tracing = { version = "0.1.0" }
+tracing = { version = "0.1.0", features = ["valuable"] }
 thiserror = { version = "2.0.3" }
 oauth2 = { version = "4.4.2" }
 tower = { version = "0.5.1", features = ["full"] }
@@ -58,7 +57,6 @@ tracing-error = "0.2.1"
 
 asn1_codecs_derive = "0.7.0"
 asn1-codecs = "0.7.0"
-bitvec = { version = "1.0.1", features = ["serde"] }
 smart-default = "0.7.1"
 log = "0.4.21"
 enum-as-inner = "0.6.1"
@@ -71,26 +69,31 @@ mediatype = "0.19"
 scc = "2.2.6"
 rustc-hash = "2.1"
 solana-nohash-hasher = "0.2.1"
-tokio-sctp = "0.1.0"
+tokio-sctp = "0.2.0"
+valuable = "0.1.0"
 
 # Depenedency of tokio-sctp
 socket2 = "0.4"
+derive-new = "0.7"
+faster-hex = "0.10.0"
+nonempty = { version = "0.8.1", features = ["serialize"] }
+bitvec = "1.0.1"
 
-oasbi = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", branch = "master", package = "oasbi" }
-openapi-smf = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", branch = "master", package = "openapi-smf", features = [
+oasbi = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", package = "oasbi", rev = "c9b2962" }
+openapi-smf = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", package = "openapi-smf", features = [
     "server",
-] }
-openapi-chf = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", branch = "master", package = "openapi-chf", features = [
+], rev = "c9b2962"   }
+openapi-chf = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/",package = "openapi-chf", features = [
     "server",
-] }
-openapi-pcf = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", branch = "master", package = "openapi-pcf", features = [
+], rev = "c9b2962" }
+openapi-pcf = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/",package = "openapi-pcf", features = [
     "server",
-] }
-openapi-udm = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", branch = "master", package = "openapi-udm", features = [
+], rev = "c9b2962" }
+openapi-udm = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/",package = "openapi-udm", features = [
     "server",
-] }
-openapi-nrf = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/", branch = "master", package = "openapi-nrf", features = [
+], rev = "c9b2962" }
+openapi-nrf = { git = "ssh://git@bitbucket.org/blocknet/openapi-5gc.git/",package = "openapi-nrf", features = [
     "server",
-] }
-ngap-models = { git = "ssh://git@github.com/UnifyAir/asn-models.git/", branch = "master", package = "ngap" }
-asn1-per = { git = "ssh://git@github.com/UnifyAir/asn-models.git/", branch = "master", package = "asn1-per" }
+], rev = "c9b2962" }
+ngap-models = { git = "ssh://git@github.com/UnifyAir/asn-models.git/",package = "ngap", branch = "master", default-features = false, features = ["gnb"]}
+asn1-per = { git = "ssh://git@github.com/UnifyAir/asn-models.git/",package = "asn1-per", branch = "master", default-features=false, features=["gnb"] }

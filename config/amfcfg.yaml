@@ -4,8 +4,8 @@ info:
 
 sbi: # Service-based interface information
   scheme: http # the protocol for sbi (http or https)
-  registerIpv4: 127.0.0.18 # IP used to register to NRF
-  bindingIpv4: 127.0.0.18 # IP used to bind the service
+  registerIpv4: 127.0.0.1 # IP used to register to NRF
+  bindingIpv4: 127.0.0.1 # IP used to bind the service
   port: 8000 # port used to bind the service
   tls: # the local path of TLS key
     pem: cert/amf.pem # AMF TLS Certificate
@@ -19,7 +19,7 @@ sbi: # Service-based interface information
 configuration:
   amfName: AMF # the name of this AMF
   ngapIpList: # the IP list of N2 interfaces on this AMF
-    - 127.0.0.18
+    - 127.0.0.1
   ngapPort: 38412 # the SCTP port listened by NGAP
 
     # - namf-oam # OAM service
