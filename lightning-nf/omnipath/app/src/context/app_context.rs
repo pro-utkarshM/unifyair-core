@@ -1,11 +1,12 @@
 use std::{net::IpAddr, ops::Deref, sync::Arc};
 
 use arc_swap::{ArcSwap, Guard};
+use nonempty::NonEmpty;
 use oasbi::{
 	common::{Guami, NfInstanceId, Tai},
 	nrf::types::{IpEndPoint, NfService1, NfServiceStatus, NfServiceVersion, TransportProtocol},
 };
-use oasbi::nrf::types::NfProfile1;
+use tokio::sync::OnceCell;
 use uuid::Uuid;
 
 use crate::config::{
@@ -16,43 +17,28 @@ use crate::config::{
 	SerdeValidated,
 };
 
-#[derive(Debug, Default)]
-pub(crate) struct AppContextInner {
-	// 	tmsi_generator: IDGenerator,
-	// 	amf_ue_ngap_id_generator: IDGenerator,
-	// 	amf_status_subscription_id_generator: IDGenerator,
+#[derive(Debug)]
+pub struct AppContextInner {
 	config: ArcSwap<Configuration>,
 	sbi: ArcSwap<SbiConfig>,
-
 }
 
-#[derive(Debug, Default, Clone)]
-pub(crate) struct Configuration {
-	pub(crate) name: String,
-	pub(crate) nf_id: NfInstanceId,
-	pub(crate) ngap_ips: Vec<IpAddr>,
-	pub(crate) ngap_port: u16,
-	pub(crate) served_guami_list: Vec<Guami>,
-	pub(crate) support_dnn_list: Vec<String>,
-	pub(crate) support_tai_list: Vec<Tai>,
-	pub(crate) plmn_support_list: Vec<PlmnSupportItem>,
-	pub(crate) tnl_weight_factor: u64,
-	pub(crate) nf_services: Vec<NfService1>,
+#[derive(Debug, Clone)]
+pub struct Configuration {
+	pub name: String,
+	pub nf_id: NfInstanceId,
+	pub ngap_ips: Vec<IpAddr>,
+	pub ngap_port: u16,
+	pub served_guami_list: NonEmpty<Guami>,
+	pub support_dnn_list: Vec<String>,
+	pub support_tai_list: Vec<Tai>,
+	pub plmn_support_list: NonEmpty<PlmnSupportItem>,
+	pub tnl_weight_factor: u64,
+	pub nf_services: Vec<NfService1>,
 }
 
-impl AppContextInner {
-	pub fn initialize(config: &SerdeValidated<OmniPathConfig>) -> Self {
-		let mut context = Self::default();
-		context.update_config(config);
-		context
-	}
-
-	// TODO: Implement access trait for multiple config updates.
-	// TODO: Have only one central config
-	pub fn update_config(
-		&mut self,
-		valid_config: &SerdeValidated<OmniPathConfig>,
-	) {
+impl Configuration {
+	pub fn new(valid_config: &SerdeValidated<OmniPathConfig>) -> Self {
 		let config = valid_config.inner();
 		let OmniPathInnerConfig {
 			amf_name: name,
@@ -67,7 +53,7 @@ impl AppContextInner {
 		let nf_id = Uuid::new_v4();
 
 		let nf_services = Self::build_nf_services(valid_config);
-		let amf_config = Configuration {
+		let configuration = Configuration {
 			name,
 			ngap_ips,
 			ngap_port,
@@ -79,22 +65,8 @@ impl AppContextInner {
 			tnl_weight_factor: 0,
 			nf_id: NfInstanceId::from(nf_id),
 		};
-		self.config.swap(Arc::new(amf_config));
-		self.sbi.store(Arc::new(config.sbi.clone()));
+		configuration	
 	}
-
-	/// Retrieves short-lived access to the configuration. Avoid storing the
-	/// returned reference.
-	pub fn get_config(&self) -> Guard<Arc<Configuration>> {
-		self.config.load()
-	}
-
-	/// Retrieves short-lived access to the Sbi configuration. Avoid storing the
-	/// returned reference.
-	pub fn get_sbi_config(&self) -> Guard<Arc<SbiConfig>> {
-		self.sbi.load()
-	}
-
 
 	pub fn build_nf_services(config: &SerdeValidated<OmniPathConfig>) -> Vec<NfService1> {
 		let config = config.inner();
@@ -131,13 +103,51 @@ impl AppContextInner {
 
 		service_list
 	}
+}
+
+impl AppContextInner {
+	pub fn initialize(config: &SerdeValidated<OmniPathConfig>) -> Self {
+		let amf_config = Configuration::new(config);
+		Self {
+			config: ArcSwap::new(Arc::new(amf_config)),
+			sbi: ArcSwap::new(Arc::new(config.inner().sbi.clone())),
+		}
+	}
+
+	// TODO: Implement access trait for multiple config updates.
+	// TODO: Have only one central config
+	pub fn update_config(
+		&mut self,
+		valid_config: &SerdeValidated<OmniPathConfig>,
+	) {	
+		let config = Configuration::new(valid_config);
+		self.config.swap(Arc::new(config));
+		self.sbi.store(Arc::new(valid_config.inner().sbi.clone()));
+	}
+
+
+	/// Retrieves short-lived access to the configuration. Avoid storing the
+	/// returned reference.
+	pub fn get_config(&self) -> Guard<Arc<Configuration>> {
+		self.config.load()
+	}
+
+	/// Retrieves short-lived access to the Sbi configuration. Avoid storing the
+	/// returned reference.
+	pub fn get_sbi_config(&self) -> Guard<Arc<SbiConfig>> {
+		self.sbi.load()
+	}
+
+	
 
 	/// Updates the configuration and commits the changes atomically.
 	///
-	/// This method takes a closure that modifies the Configuration, applies the changes,
-	/// and then commits the updated configuration atomically.
-	pub fn commit_config<F>(&self, update_fn: F)
-	where
+	/// This method takes a closure that modifies the Configuration, applies the
+	/// changes, and then commits the updated configuration atomically.
+	pub fn commit_config<F>(
+		&self,
+		update_fn: F,
+	) where
 		F: FnOnce(&mut Configuration),
 	{
 		// Clone the current configuration for modification
@@ -153,14 +163,13 @@ impl AppContextInner {
 	pub fn get_nf_id(&self) -> NfInstanceId {
 		self.get_config().nf_id
 	}
-
 }
 
-#[derive(Clone)]
-pub(crate) struct AppContext(Arc<AppContextInner>);
+#[derive(Clone, Debug)]
+pub struct AppContext(Arc<AppContextInner>);
 
 impl AppContext {
-	pub(crate) fn initialize(config: &SerdeValidated<OmniPathConfig>) -> Self {
+	pub fn initialize(config: &SerdeValidated<OmniPathConfig>) -> Self {
 		let inner_context = AppContextInner::initialize(config);
 		Self(Arc::new(inner_context))
 	}
@@ -172,3 +181,15 @@ impl Deref for AppContext {
 		&self.0
 	}
 }
+
+pub static APP_CONTEXT: OnceCell<AppContext> = OnceCell::const_new();
+
+pub async fn get_global_app_context() -> &'static AppContext {
+    APP_CONTEXT.get_or_init(|| async {
+		// Safety: The config is initialized in the Start of the application. Thus calling this function would always return 
+		// an initialized context.
+		let config = SerdeValidated::new(OmniPathConfig::default()).unwrap();
+        AppContext::initialize(&config)
+    }).await
+}
+

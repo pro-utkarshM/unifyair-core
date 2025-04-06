@@ -15,14 +15,14 @@ impl AppContext {
 		let amf_info = AmfInfo {
 			amf_region_id: amf_id.region_id,
 			amf_set_id: amf_id.set_id,
-			guami_list: config.served_guami_list.clone(),
+			guami_list: config.served_guami_list.clone().into(),
 			tai_list: config.support_tai_list.clone(),
 			..Default::default()
 		};
 		let plmn_list = config
 			.plmn_support_list
 			.iter()
-			.map(|e| e.plmn_id)
+			.map(|e| e.plmn_id.clone())
 			.collect::<Vec<_>>();
 		let mut nf_profile = NfProfile1Unchecked {
 			nf_instance_id: config.nf_id,
