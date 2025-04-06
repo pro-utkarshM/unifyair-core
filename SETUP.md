@@ -56,6 +56,8 @@ rustflags = [
     "--cfg",
     "tokio_unstable",
     "-Zmacro-backtrace",
+    "--cfg",
+    "tracing_unstable"
     # '-C target_feature=+avx2',
 ]
 rustdocflags = ["--cfg", "tokio_unstable"]
