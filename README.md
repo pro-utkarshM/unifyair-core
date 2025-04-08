@@ -2,6 +2,25 @@
 
 UnifyAir Core is an open-source implementation of 5G Core Network Functions (NFs) written in Rust, focusing on high performance, reliability, and scalability. This project aims to provide a modular and efficient implementation of key 5G network functions.
 
+## Table of Contents
+- [UnifyAir Core - 5G Network Functions Implementation](#unifyair-core---5g-network-functions-implementation)
+  - [Table of Contents](#table-of-contents)
+  - [Project Overview](#project-overview)
+    - [Implemented Network Functions](#implemented-network-functions)
+    - [Planned Nf Support](#planned-nf-support)
+  - [Project Scope](#project-scope)
+    - [Current Features](#current-features)
+    - [Planned Features](#planned-features)
+  - [Project Structure](#project-structure)
+  - [Getting Started](#getting-started)
+    - [Prerequisites](#prerequisites)
+    - [Local Development Setup](#local-development-setup)
+  - [Configuration](#configuration)
+  - [Testing](#testing)
+  - [Contributing](#contributing)
+    - [Development Process](#development-process)
+  - [Contact](#contact)
+
 ## Project Overview
 
 UnifyAir Core implements the following Network Functions (NFs):
@@ -43,6 +62,22 @@ UnifyAir Core implements the following Network Functions (NFs):
 - Performance optimization and scaling improvements
 - Extended monitoring and analytics
 - Cloud-native deployment support
+
+## Project Structure
+```
+unifyair-core/
+├── lightning-nf/           # Network Functions implementations
+│   └── omnipath/           # AMF (Access and Mobility Management Function)
+├── lightning-cli/          # Command-line interface tools
+├── utils/                  # Shared utilities and common code
+├── config/                 # Configuration files
+│   ├── amfcfg.yaml         # AMF configuration
+│   ├── smfcfg.yaml         # SMF configuration
+│   └── upfcfg.yaml         # UPF configuration
+├── Cargo.toml              # Rust package manifest
+├── rust-toolchain.toml     # Rust toolchain configuration
+└── run.sh                  # Utility script for running the project
+```
 
 ## Getting Started
 
@@ -89,9 +124,9 @@ We welcome contributions! Please see our [CONTRIBUTING.md](CONTRIBUTING.md) for 
 4. Push to your fork
 5. Submit a Pull Request
 
-## License
+<!-- ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. -->
 
 ## Contact
 
