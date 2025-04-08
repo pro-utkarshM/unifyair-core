@@ -1,5 +1,3 @@
-pub mod convert;
-
 use ngap_models::{AmfUeNgapId, Cause, CauseProtocol, ErrorIndication, ExtendedRanNodeName, RanNodeName, RanUeNgapId};
 
 pub fn resolve_ran_name(

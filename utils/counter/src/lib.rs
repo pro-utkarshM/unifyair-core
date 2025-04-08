@@ -2,6 +2,7 @@ use std::sync::atomic::{AtomicU8, AtomicU16, AtomicU32, AtomicU64, AtomicUsize, 
 
 macro_rules! define_counter {
     ($counter_name:ident, $atomic_type:ident, $base_type:ty) => {
+        #[derive(Debug)]
         pub struct $counter_name($atomic_type);
 
         impl $counter_name {
@@ -11,6 +12,11 @@ macro_rules! define_counter {
 
             pub fn increment(&self) -> $base_type {
                 self.0.fetch_add(1, Ordering::Relaxed) as $base_type
+            }
+        }
+        impl Default for $counter_name {
+            fn default() -> Self {
+                Self::new()
             }
         }
     };

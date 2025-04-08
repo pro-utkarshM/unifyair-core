@@ -13,7 +13,6 @@ use ngap_models::{
 };
 use nonempty::NonEmpty;
 use oasbi::common::{AmfId as SbiAmfId, Guami as SbiGuami, Snssai as SbiSnssai};
-use tracing::info;
 
 use super::{Element, convert, transform_nonempty};
 use crate::config::PlmnSupportItem as ConfigPlmnSupportItem;

@@ -3,6 +3,7 @@ use std::{fmt::Debug, future::Future, pin::Pin, sync::Arc};
 use rustc_hash::FxBuildHasher;
 use scc::hash_map::HashMap as SccHashMap;
 use thiserror::Error;
+use tokio::sync::{OwnedRwLockWriteGuard, RwLock};
 
 use super::context_queue::ContextQueue;
 
@@ -13,11 +14,13 @@ use super::context_queue::ContextQueue;
 pub trait Identifiable {
 	/// The type of the ID, which must be clonable, debuggable, equatable, and
 	/// hashable.
-	type ID: Clone + Debug + Eq + PartialEq + std::hash::Hash;
+	type ID: Clone + Debug + Eq + PartialEq + std::hash::Hash + Copy + Send + Sync + 'static;
 
 	/// Returns the ID of the implementor.
 	fn id(&self) -> &Self::ID;
 }
+
+pub type PinnedSendSyncFuture<T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 'static>>;
 
 /// A manager for context elements that can be identified by a unique ID.
 ///
@@ -31,14 +34,15 @@ pub struct ContextManager<T: Identifiable> {
 }
 
 impl<T: Identifiable> Debug for ContextManager<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ContextManager")
-            .field("Number of elements", &self.queues.len())
-            .finish()
-    }
+	fn fmt(
+		&self,
+		f: &mut std::fmt::Formatter<'_>,
+	) -> std::fmt::Result {
+		f.debug_struct("ContextManager")
+			.field("Number of elements", &self.queues.len())
+			.finish()
+	}
 }
-
-
 
 impl<T: Identifiable + Send + Sync + 'static> ContextManager<T> {
 	/// Creates a new, empty `ContextManager`.
@@ -73,15 +77,37 @@ impl<T: Identifiable + Send + Sync + 'static> ContextManager<T> {
 	/// * `Err(ContextError::ContextAlreadyExists)` if a context with the same
 	///   ID already exists
 	pub async fn add_context(
-		&mut self,
+		&self,
 		context: T,
 	) -> Result<(), ContextError<T>> {
 		let id = context.id().to_owned();
 		let queue = Arc::new(ContextQueue::new(context));
 		self.queues
-			.insert_async(id, queue)
+			.insert_async(id.clone(), queue.clone())
 			.await
-			.map_err(|(id, _)| ContextError::ContextAlreadyExists(id))
+			.map_err(|(id, queue)| {
+				debug_assert_eq!(
+					Arc::strong_count(&queue),
+					1,
+					"Arc should have exactly one strong reference"
+				);
+				debug_assert_eq!(
+					Arc::weak_count(&queue),
+					0,
+					"Arc should have no weak references"
+				);
+				// Safety: This is safe because:
+				// 1. The queue value comes from a failed insert_async operation, meaning it was
+				//    never stored in the map
+				// 2. We have the only Arc reference to this queue as it was just created and
+				//    clone() was only used for the failed insert
+				// 3. No other tasks could have been spawned as the queue never made it into the
+				//    manager
+				// Therefore we can safely unwrap the Arc and extract the inner value
+				let ctx_queue_inner = Arc::into_inner(queue).unwrap();
+				let inner = unsafe { ctx_queue_inner.into_inner() }.unwrap();
+				ContextError::ContextAlreadyExists(id, inner)
+			})
 	}
 
 	/// Changes the ID of a context element.
@@ -104,7 +130,7 @@ impl<T: Identifiable + Send + Sync + 'static> ContextManager<T> {
 	///   - An element with the new ID already exists
 	///     (`ContextChangeError::NewIdAlreadyExists`)
 	pub async fn change_id(
-		&mut self,
+		&self,
 		old_id: T::ID,
 		new_id: T::ID,
 	) -> Result<(), ContextError<T>> {
@@ -133,6 +159,13 @@ impl<T: Identifiable + Send + Sync + 'static> ContextManager<T> {
 		}
 	}
 
+	pub async fn contains_context(
+		&self,
+		id: &T::ID,
+	) -> bool {
+		self.queues.contains_async(id).await
+	}
+
 	/// Executes a closure with exclusive access to a context element and
 	/// returns its result.
 	///
@@ -159,7 +192,7 @@ impl<T: Identifiable + Send + Sync + 'static> ContextManager<T> {
 		closure: F,
 	) -> Result<O, ContextError<T>>
 	where
-		F: FnOnce(&mut T) -> Pin<Box<dyn Future<Output = O> + Send + Sync + 'static>>
+		F: FnOnce(OwnedRwLockWriteGuard<T>) -> PinnedSendSyncFuture<O>
 			+ Send
 			+ Sync
 			+ 'static,
@@ -179,7 +212,7 @@ impl<T: Identifiable + Send + Sync + 'static> ContextManager<T> {
 pub enum ContextError<T: Identifiable> {
 	/// Error when attempting to add a context that already exists.
 	#[error("ContextAlreadyExists: Context already exists {0:?}")]
-	ContextAlreadyExists(T::ID),
+	ContextAlreadyExists(T::ID, T),
 
 	/// Error when attempting to access a context that doesn't exist.
 	#[error("ContextNotFound: Context not found {0:?}")]

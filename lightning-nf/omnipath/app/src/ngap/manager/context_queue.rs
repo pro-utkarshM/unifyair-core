@@ -8,7 +8,10 @@ use std::{
 	},
 };
 
-use tokio::sync::{Mutex, RwLock, oneshot};
+use tokio::sync::{Mutex, OwnedRwLockWriteGuard, RwLock, oneshot};
+use tracing::Instrument;
+
+use super::context_manager::Identifiable;
 
 /// `ContextQueue` is designed to manage and execute asynchronous operations on
 /// a shared context (`T`) in a sequential manner. It combines an internal,
@@ -35,7 +38,6 @@ pub(crate) struct ContextQueue<T> {
 	processor_active: AtomicBool,
 }
 
-
 impl<T> ContextQueue<T> {
 	pub fn new(context: T) -> Self {
 		ContextQueue {
@@ -44,11 +46,19 @@ impl<T> ContextQueue<T> {
 			processor_active: AtomicBool::new(false),
 		}
 	}
+
+	/// Extracts the inner context value, consuming the queue.
+	/// This should only be used when you are certain there are no pending
+	/// operations.
+	pub unsafe fn into_inner(self) -> Option<T> {
+		let t = Arc::into_inner(self.inner);
+		t.map(|t| t.into_inner())
+	}
 }
 
 impl<T> ContextQueue<T>
 where
-	T: Send + Sync + 'static,
+	T: Identifiable + Send + Sync + 'static,
 {
 	/// Pushes a future onto the queue.
 	///
@@ -122,7 +132,9 @@ where
 		tx: oneshot::Sender<O>,
 	) -> Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>>
 	where
-		F: FnOnce(&mut T) -> Pin<Box<dyn Future<Output = O> + Send + Sync + 'static>>
+		F: FnOnce(
+				OwnedRwLockWriteGuard<T>,
+			) -> Pin<Box<dyn Future<Output = O> + Send + Sync + 'static>>
 			+ Send
 			+ Sync
 			+ 'static,
@@ -130,9 +142,9 @@ where
 	{
 		let context = self.inner.clone();
 		Box::pin(async move {
-			let mut context = context.write().await;
-			let mut context: &mut T = &mut *context;
-			let future = closure(&mut context);
+			let context = context.write_owned().await;
+			let id = *context.id();
+			let future = closure(context).instrument(tracing::info_span!("ContextQueue", id = ?id));
 			let output = future.await;
 			// The receiver will be waiting for this result, so we ignore the
 			// result of send.  If the receiver has been dropped, then the
@@ -176,7 +188,9 @@ where
 		closure: F,
 	) -> O
 	where
-		F: FnOnce(&mut T) -> Pin<Box<dyn Future<Output = O> + Send + Sync + 'static>>
+		F: FnOnce(
+				OwnedRwLockWriteGuard<T>,
+			) -> Pin<Box<dyn Future<Output = O> + Send + Sync + 'static>>
 			+ Send
 			+ Sync
 			+ 'static,

@@ -5,7 +5,7 @@ use oasbi::{
 use openapi_nrf::models::NfProfile1;
 use tracing::trace;
 
-use crate::{context::app_context::AppContext, models::sbi::ModelBuildError};
+use crate::{context::app_context::AppContext, builder::sbi::ModelBuildError};
 
 impl AppContext {
 	pub fn build_nf_profile(&self) -> Result<NfProfile1, ModelBuildError> {
@@ -24,7 +24,7 @@ impl AppContext {
 			.iter()
 			.map(|e| e.plmn_id.clone())
 			.collect::<Vec<_>>();
-		let mut nf_profile = NfProfile1Unchecked {
+		let nf_profile = NfProfile1Unchecked {
 			nf_instance_id: config.nf_id,
 			nf_type: NfType::Amf,
 			nf_status: NfStatus::Registered,

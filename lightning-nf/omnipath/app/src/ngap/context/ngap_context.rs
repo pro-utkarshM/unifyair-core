@@ -1,5 +1,4 @@
 use std::{collections::HashMap, sync::Arc};
-use valuable::Valuable;
 
 use asn1_per::{PerCodecError, ThreeGppAsn1PerError};
 // use asn1_per::PerCodec;
@@ -19,6 +18,7 @@ use thiserror::Error;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, error, info};
+use valuable::Valuable;
 
 use super::{
 	decode_ngap_pdu,
@@ -36,9 +36,11 @@ pub struct NgapContext {
 	pub(crate) gnb_contexts: SccHashMap<GlobalRanNodeId, Arc<GnbContext>, FxBuildHasher>,
 	pub(crate) network: Arc<Network>,
 	// TODO: Inspect if this is needed and clean it up.
-	pub(crate) gnb_associations: Arc<RwLock<HashMap<GlobalRanNodeId, Arc<TnlaAssociation>, FxBuildHasher>>>,
+	pub(crate) gnb_associations:
+		Arc<RwLock<HashMap<GlobalRanNodeId, Arc<TnlaAssociation>, FxBuildHasher>>>,
 	// TODO: Ideally Read heavy, so used better data structure for ue_ids.
-	pub(crate) ue_ids: Arc<RwLock<HashMap<AmfUeNgapId, (GlobalRanNodeId, RanUeNgapId), FxBuildHasher>>>,
+	pub(crate) ue_ids:
+		Arc<RwLock<HashMap<AmfUeNgapId, (GlobalRanNodeId, RanUeNgapId), FxBuildHasher>>>,
 }
 
 impl NgapContext {
@@ -134,7 +136,10 @@ impl NgapContext {
 			.await
 			.unwrap();
 
-		info!(global_ran_node_id = gnb_context.global_ran_node_id.as_value(), diagnostic = "Set up RAN Complete");
+		info!(
+			global_ran_node_id = gnb_context.global_ran_node_id.as_value(),
+			diagnostic = "Set up RAN Complete"
+		);
 		// Spawn NGAP processing loop
 		let gnb_context_clone = gnb_context.clone();
 		let self_clone = self.clone();
@@ -144,9 +149,10 @@ impl NgapContext {
 				let _ = res.map_err(|e| error!(diagnostic = "Error running NGAP loop", error = ?e));
 				// TODO: Implement cleanup logic for gNB context and UE contexts
 			}
-			.instrument(
-				tracing::trace_span!("ngap_request", id = gnb_context_clone.global_ran_node_id.as_value()),
-			),
+			.instrument(tracing::trace_span!(
+				"ngap_request",
+				id = gnb_context_clone.global_ran_node_id.as_value()
+			)),
 		);
 	}
 
@@ -253,8 +259,7 @@ impl NgapContext {
 				.to_pdu()
 			}
 		};
-		self.encode_and_write_ngap_pdu(tnla.as_ref(), response)
-			.await?;
+		encode_and_write_ngap_pdu(tnla.as_ref(), response).await?;
 		result
 	}
 
@@ -293,19 +298,18 @@ impl NgapContext {
 			tokio::spawn(async move {
 				let pdu = decode_ngap_pdu(&message);
 				let response = match pdu {
-					Ok(pdu) => self_clone.ngap_route(gnb_context_clone.clone(), pdu),
+					Ok(pdu) => self_clone.ngap_route(gnb_context_clone.clone(), pdu).await,
 					Err((pdu, error)) => {
 						error!(diagnostic = "Error decoding NGAP PDU", error = ?error);
 						Some(pdu)
 					}
 				};
 				if let Some(response) = response {
-					let resp = self_clone
-						.encode_and_write_ngap_pdu(
-							&gnb_context_clone.as_ref().tnla_association,
-							response,
-						)
-						.await;
+					let resp = encode_and_write_ngap_pdu(
+						&gnb_context_clone.as_ref().tnla_association,
+						response,
+					)
+					.await;
 					match resp {
 						Ok(_) => (),
 						Err(e) => {
@@ -320,36 +324,34 @@ impl NgapContext {
 		Ok(())
 	}
 
-	/// Encodes and writes an NGAP PDU to the specified TNLA connection.
-	///
-	/// # Arguments
-	/// * `tnla` - Reference to the TNLA connection
-	/// * `pdu` - The NGAP PDU to encode and send
-	///
-	/// # Returns
-	/// * `Result<(), NgapWriteError>` - Success or error during
-	///   encoding/writing
-	///
-	/// # Errors
-	/// - NetworkError: If writing to the TNLA fails
-	/// - EncodingError: If PDU encoding fails (these are logged but not
-	///   propagated)
-	pub async fn encode_and_write_ngap_pdu(
-		&self,
-		tnla: &TnlaAssociation,
-		pdu: NgapPdu,
-	) -> Result<(), NgapWriteError> {
-		match codec_to_bytes(&pdu) {
-			Ok(bytes) => tnla.write_data(bytes.into(), None).await.map_err(|err| {
-				NgapWriteError::NetworkError(NetworkError::TnlaSendError(tnla.id, err))
-			}),
-			Err(e) => Err(NgapWriteError::EncodingError(e)),
-		}
-	}
-
 	// TODO: Implement graceful shutdown for the network
 	pub async fn graceful_shutdown(&self) -> Result<(), NetworkError> {
 		Ok(())
+	}
+}
+
+/// Encodes and writes an NGAP PDU to the specified TNLA connection.
+///
+/// # Arguments
+/// * `tnla` - Reference to the TNLA connection
+/// * `pdu` - The NGAP PDU to encode and send
+///
+/// # Returns
+/// * `Result<(), NgapWriteError>` - Success or error during encoding/writing
+///
+/// # Errors
+/// - NetworkError: If writing to the TNLA fails
+/// - EncodingError: If PDU encoding fails (these are logged but not propagated)
+pub async fn encode_and_write_ngap_pdu(
+	tnla: &TnlaAssociation,
+	pdu: NgapPdu,
+) -> Result<(), NgapWriteError> {
+	match codec_to_bytes(&pdu) {
+		Ok(bytes) => tnla
+			.write_data(bytes.into(), None)
+			.await
+			.map_err(|err| NgapWriteError::NetworkError(NetworkError::TnlaSendError(tnla.id, err))),
+		Err(e) => Err(NgapWriteError::EncodingError(e)),
 	}
 }
 

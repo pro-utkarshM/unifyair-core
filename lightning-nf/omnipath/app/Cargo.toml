@@ -53,6 +53,7 @@ derive-new.workspace = true
 nonempty.workspace = true
 faster-hex.workspace = true
 valuable.workspace = true
+ascii.workspace = true
 
 counter = { path = "../../../utils/counter" }
 client = { path = "../../../utils/client" }

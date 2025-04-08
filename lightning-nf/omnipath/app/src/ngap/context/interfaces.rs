@@ -2,7 +2,7 @@ use std::{error::Error, fmt::Debug, future::Future};
 
 use asn1_per::PerCodec;
 use derive_new::new;
-use ngap_models::{Cause, CauseProtocol, ErrorIndication, NgapPdu, ToNgapPdu};
+use ngap_models::{ErrorIndication, NgapPdu, ToNgapPdu};
 use thiserror::Error;
 use tracing::error;
 
@@ -41,6 +41,12 @@ impl<Failure: Debug, Err: Debug + Error> NgapResponseError<Failure, Err> {
 	}
 }
 
+impl<Err: Debug + Error> NgapResponseError<EmptyResponse, Err> {
+	pub fn new_empty_failure_error(error: impl Into<Err>) -> Self {
+		Self::new_failure_error(EmptyResponse::new(), error)
+	}
+}
+
 impl<Failure> NgapFailure<Failure> {
 	pub fn new_failure(failure: Failure) -> Self {
 		Self::Failure(failure)
@@ -53,7 +59,9 @@ impl<Failure> NgapFailure<Failure> {
 
 pub trait ToPdu {
 	fn to_pdu(self) -> Option<NgapPdu>;
-	fn get_name() -> &'static str;
+	fn get_name() -> &'static str {
+		stringify!(Self)
+	}
 }
 
 impl<T> ToPdu for T
@@ -63,14 +71,16 @@ where
 	fn to_pdu(self) -> Option<NgapPdu> {
 		Some(self.to_pdu())
 	}
-
-	fn get_name() -> &'static str {
-		stringify!(T)
-	}
 }
 
 #[derive(Debug)]
 pub struct EmptyResponse;
+
+impl EmptyResponse {
+	pub fn new() -> Self {
+		Self
+	}
+}
 
 impl ToPdu for EmptyResponse {
 	fn to_pdu(self) -> Option<NgapPdu> {
@@ -94,6 +104,15 @@ where
 	}
 }
 
+impl ToPdu for NgapFailure<EmptyResponse> {
+	fn to_pdu(self) -> Option<NgapPdu> {
+		match self {
+			NgapFailure::Failure(_) => None,
+			NgapFailure::GenericError(error) => Some(<_ as ToNgapPdu>::to_pdu(error)),
+		}
+	}
+}
+
 pub fn log_and_convert_to_pdu<T, F, E>(result: Result<T, NgapResponseError<F, E>>) -> NgapPdu
 where
 	T: ToNgapPdu + Debug,
@@ -110,8 +129,8 @@ where
 }
 
 pub trait NgapRequestHandler<Req: Debug, State> {
-	type Success: PerCodec + Debug + Send + 'static + ToPdu;
-	type Failure: PerCodec + Debug + Send + 'static + ToPdu;
+	type Success: Debug + Send + 'static + ToPdu;
+	type Failure: Debug + Send + 'static + ToPdu;
 	type Error: Debug + Error + Send + 'static;
 
 	fn handle_request(

@@ -2,8 +2,9 @@
 
 pub(crate) mod config;
 pub(crate) mod context;
-pub mod models;
+pub mod builder;
 pub mod ngap;
+pub mod utils;
 pub use context::app_context::get_global_app_context;
 
 use std::{rc::Rc, sync::Arc};
@@ -21,7 +22,7 @@ use tracing::info;
 use crate::{
 	config::SerdeValidated,
 	context::app_context::{AppContext, Configuration},
-	models::sbi::ModelBuildError,
+	builder::sbi::ModelBuildError,
 };
 use ngap::{context::NgapContext, network::{Network, NetworkError}};
 

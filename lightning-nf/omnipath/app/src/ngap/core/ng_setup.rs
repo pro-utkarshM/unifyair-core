@@ -1,25 +1,26 @@
 use ngap_models::{
-	AmfName, BroadcastPlmnItem, Cause, CauseMisc, GlobalRanNodeId, NgSetupFailure, NgSetupRequest, NgSetupResponse, RelativeAmfCapacity, SupportedTaItem
+	AmfName,
+	BroadcastPlmnItem,
+	Cause,
+	CauseMisc,
+	GlobalRanNodeId,
+	NgSetupFailure,
+	NgSetupRequest,
+	NgSetupResponse,
+	RelativeAmfCapacity,
+	SupportedTaItem,
 };
-use oasbi::common::{
-	PlmnId,
-	Tac as SbiTac,
-	Tai,
-	error::ConversionError,
-};
+use oasbi::common::{PlmnId, Tac as SbiTac, Tai, error::ConversionError};
 use thiserror::Error;
-use tracing::{info, trace};
+use tracing::trace;
 
-use super::utils::{
-	convert::{convert as ngap_convert, try_convert as ngap_try_convert},
-	new_semantic_error_cause,
-};
 use crate::{
 	get_global_app_context,
 	ngap::{
 		context::{GnbContext, NgapContext, NgapRequestHandler, NgapResponseError, SupportedTai},
-		core::utils::resolve_ran_name,
+		core::utils::{new_semantic_error_cause, resolve_ran_name},
 	},
+	utils::{convert as ngap_convert, try_convert as ngap_try_convert},
 };
 
 impl NgapRequestHandler<NgSetupRequest, &mut GnbContext> for NgapContext {
@@ -45,7 +46,7 @@ impl NgapRequestHandler<NgSetupRequest, &mut GnbContext> for NgapContext {
 			return Err(NgapResponseError::new_failure_error(
 				build_failure(new_semantic_error_cause()),
 				NgSetupError::ConflictingRanId(global_ran_node_id),
-			))
+			));
 		}
 
 		// Set RAN ID from global RAN node ID
