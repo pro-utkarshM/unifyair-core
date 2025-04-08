@@ -18,7 +18,7 @@ use tracing::trace;
 
 mod content_type;
 mod header_map_serializer;
-pub mod nf_client;
+pub mod nf_clients;
 pub mod nrf_client;
 pub mod token_store;
 

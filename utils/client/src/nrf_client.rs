@@ -30,13 +30,8 @@ use openapi_nrf::{
 	models::{
 		AccessTokenRsp,
 		AccessTokenRspTokenType,
-		DeregisterNfInstancePathParams,
 		NfProfile1,
-		NfService,
-		NfService1,
-		NfServiceInstance,
 		RegisterNfInstanceHeaderParams,
-		RegisterNfInstancePathParams,
 		SearchNfInstancesHeaderParams,
 		SearchNfInstancesQueryParams,
 		SearchResult,
@@ -48,13 +43,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 use tracing::trace;
-use uuid::Uuid;
 
 use crate::{
 	ContentType,
 	GenericClientError,
 	prepare_request,
-	token_store::{StoreError, TokenEntry, TokenState, TokenStore},
+	token_store::{StoreError, TokenEntry, TokenStore},
 };
 
 /// `TraitSatisfier` is an empty enum that exists solely to satisfy trait
@@ -102,7 +96,7 @@ pub struct NrfClient {
 	client: Client,
 	init_config: InitConfig,
 	nf_config: ArcSwap<NfConfig>,
-	nf_token_store: TokenStore<ServiceName, AccessTokenRsp>,
+	nf_token_store: TokenStore<Vec<ServiceName>, AccessTokenRsp>,
 }
 
 impl NrfClient {
@@ -292,7 +286,7 @@ impl NrfClient {
 			Option::<&TraitSatisfier>::None,
 			ContentType::AppJson,
 		)?;
-		self.set_auth_token::<{ NfType::Nrf }>(&mut request, ServiceName::NnrfNfm)
+		self.set_auth_token::<{ NfType::Nrf }>(&mut request, vec![ServiceName::NnrfNfm])
 			.await?;
 		let response = self
 			.client
@@ -330,13 +324,19 @@ impl NrfClient {
 		source_instance_id: NfInstanceId,
 		source_nf_type: NfType,
 		target_nf_type: NfType,
-		target_service_name: ServiceName,
+		target_service_name: Vec<ServiceName>,
 	) -> Result<AccessTokenRsp, NrfAuthorizationError> {
 		let mut token_req = AccessTokenReq::default();
 		token_req.target_nf_type = Some(target_nf_type);
 		token_req.nf_type = Some(source_nf_type);
 		token_req.nf_instance_id = source_instance_id;
-		token_req.scope = AccessTokenReqScope::from_str(&target_service_name.to_string())?;
+		token_req.scope = AccessTokenReqScope::from_str(
+			&target_service_name
+				.iter()
+				.map(|s| s.to_string())
+				.collect::<Vec<_>>()
+				.join(" "),
+		)?;
 		let nrf_service_properties =
 			NrfService::AccessToken(NrfAccessTokenOperation::AccessTokenRequest);
 		let method = nrf_service_properties.get_http_method();
@@ -389,7 +389,7 @@ impl NrfClient {
 impl NrfClient {
 	pub async fn get_token<const T: NfType>(
 		&self,
-		target_service_name: ServiceName,
+		target_service_name: Vec<ServiceName>,
 	) -> Result<TokenEntry<AccessTokenRsp>, NrfAuthorizationError> {
 		let token_entry = self.nf_token_store.get(&target_service_name).await?;
 		match token_entry {
@@ -415,7 +415,7 @@ impl NrfClient {
 	pub async fn set_auth_token<const T: NfType>(
 		&self,
 		req: &mut Request,
-		service_name: ServiceName,
+		service_name: Vec<ServiceName>,
 	) -> Result<(), NrfAuthorizationError> {
 		if self.nf_config.load().oauth_enabled {
 			let token_entry = self.get_token::<T>(service_name).await?;
@@ -502,4 +502,19 @@ pub(crate) fn set_auth_token(
 	let headers_mut = req.headers_mut();
 	headers_mut.insert(AUTHORIZATION, token.try_into()?);
 	Ok(())
+}
+
+#[derive(Debug)]
+pub struct Scope(String);
+
+impl From<&[ServiceName]> for Scope {
+	fn from(value: &[ServiceName]) -> Self {
+		Scope(
+			value
+				.iter()
+				.map(|s| s.to_string())
+				.collect::<Vec<_>>()
+				.join(" "),
+		)
+	}
 }
