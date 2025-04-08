@@ -51,10 +51,6 @@ impl From<Element<&NonEmpty<SbiGuami>>> for Element<NgapServedGuamiList> {
 impl From<Element<&SbiGuami>> for Element<NgapGuami> {
 	fn from(value: Element<&SbiGuami>) -> Self {
 		let (amf_region_id, amf_set_id, amf_pointer) = convert(&value.0.amf_id);
-		info!("Converted AMF ID: {:#?}", value.0.amf_id);
-		info!("AMF Region ID: {:?}", amf_region_id);
-		info!("AMF Set ID: {:?}", amf_set_id);
-		info!("AMF Pointer: {:?}", amf_pointer);
 
 		Element(NgapGuami {
 			plmn_identity: convert(&value.0.plmn_id),
@@ -75,7 +71,7 @@ impl From<Element<&SbiAmfId>> for Element<(NgapAmfRegionId, NgapAmfSetId, NgapAm
 		let mut ngap_amf_region_id = bitvec![u8,Msb0; 0; 8];
 		let mut ngap_amf_set_id = bitvec![u8,Msb0; 0; 10];
 		let mut ngap_amf_pointer = bitvec![u8,Msb0; 0; 6];
-		
+
 		ngap_amf_pointer.store_be::<u8>(*pointer_id);
 		ngap_amf_region_id.store_be::<u8>(region_id.inner());
 		ngap_amf_set_id.store_be::<u16>(set_id.inner());

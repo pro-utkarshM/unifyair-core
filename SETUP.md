@@ -68,7 +68,7 @@ git-fetch-with-cli = true
 [patch.'ssh://git@github.com/UnifyAir/asn-models.git/']
 ngap = {path = "../asn-models/ngap"}
 
-[patch.'ssh://git@bitbucket.org/blocknet/openapi-5gc.git/']
+[patch.'ssh://git@github.com/UnifyAir/open-api.git/']
 openapi-smf = { path = "../open-api/openapi-nfs/openapi-smf" }
 openapi-nrf = { path = "../open-api/openapi-nfs/openapi-nrf" }
 openapi-chf = { path = "../open-api/openapi-nfs/openapi-chf" }
