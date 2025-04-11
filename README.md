@@ -1,4 +1,4 @@
-# 🚀 UnifyAir Core - 5G Network Functions Implementation
+# 🚀 UnifyAir Core - 5G Network Functions
 
 [![Rust](https://img.shields.io/badge/Rust-1.82+-orange.svg)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/License-AGPL--3.0-green.svg)](LICENSE)
